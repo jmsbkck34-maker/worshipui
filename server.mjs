@@ -13,6 +13,7 @@ function validDate(value) {
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0,10) === value;
 }
 function validTranslations(item) {
+  if (item.fitText !== undefined && (item.type !== 'Scripture' || typeof item.fitText !== 'boolean')) return false;
   if (item.primaryVersion !== undefined && (item.type !== 'Scripture' || typeof item.primaryVersion !== 'string' || item.primaryVersion.length > 80)) return false;
   if (item.secondarySlides === undefined && item.secondaryVersion === undefined) return true;
   return item.type === 'Scripture' && typeof item.primaryVersion === 'string' && item.primaryVersion.length > 0 && item.primaryVersion.length <= 80 &&
@@ -29,7 +30,9 @@ export function validService(s) {
       ['Song','Scripture','Announcement','Sermon'].includes(i.type) &&
       ['dusk','ocean','ember','midnight'].includes(i.theme) && SlideTemplate.validTemplate(i.template) &&
       Array.isArray(i.slides) && i.slides.length > 0 && i.slides.length <= 200 &&
-      i.slides.every(t => typeof t === 'string' && t.length <= 20000) && validTranslations(i));
+      i.slides.every(t => typeof t === 'string' && t.length <= 20000) && validTranslations(i) &&
+      (i.sectionLabels === undefined || i.type === 'Song' && Array.isArray(i.sectionLabels) &&
+       i.sectionLabels.length === i.slides.length && i.sectionLabels.every(label => typeof label === 'string' && label.length <= 50)));
 }
 function passwordHash(password, salt) { return scryptSync(password, salt, 64).toString('hex'); }
 export async function openStore(directory) {

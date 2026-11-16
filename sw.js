@@ -1,4 +1,4 @@
-const CACHE='worshipui-shell-v7';
+const CACHE='worshipui-shell-v12';
 const SHELL=['/','/index.html','/style.css','/app.js','/content-import.js','/bible-search.js','/assets/bibles/kjv.vpl.txt','/sync-core.js','/sync.js','/desktop-ui.js','/slide-template.cjs','/assets/fonts/Inter.ttf','/assets/fonts/Montserrat.ttf','/assets/fonts/Lato.ttf','/assets/fonts/Merriweather.ttf','/assets/fonts/PlayfairDisplay.ttf','/assets/fonts/Oswald.ttf','/assets/fonts/Poppins.ttf','/assets/fonts/SourceSans3.ttf'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL))));
 // Do not skipWaiting: an app update must not replace a running service.

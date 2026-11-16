@@ -31,6 +31,12 @@ export async function integrationTests() {
    check((await request('/api/me',{cookie:editor.cookie})).body.username,'home-editor');
    const service={title:'Sunday',items:[{id:'song',title:'Song',type:'Song',theme:'dusk',slides:['First verse','Chorus']}]};
    check(validService(service),true);
+   const labeled=structuredClone(service);labeled.items[0].sectionLabels=['Verse 1','Chorus'];
+   check(validService(labeled),true);
+   const invalidLabels=structuredClone(labeled);invalidLabels.items[0].sectionLabels=['Verse 1'];
+   check(validService(invalidLabels),false);
+   const fitted={title:'Scripture',items:[{id:'p',title:'Passage',type:'Scripture',theme:'dusk',slides:['One\nTwo'],fitText:true}]};
+   check(validService(fitted),true);check(validService({...fitted,items:[{...fitted.items[0],fitText:'yes'}]}),false);
    check((await request('/api/service',{method:'PUT',cookie:editor.cookie,origin:'http://attacker.test',body:{baseRevision:0,service}})).status,403);
    const first=await request('/api/service',{method:'PUT',cookie:editor.cookie,body:{baseRevision:0,service}});
    check(first.status,200);check(first.body.version.revision,1);
@@ -53,7 +59,9 @@ export async function integrationTests() {
    check((await request(dated,{cookie:editor.cookie})).body.version,null);
    const datedSave=await request(dated,{method:'PUT',cookie:editor.cookie,body:{baseRevision:0,service}});
    check(datedSave.body.version.revision,1);
-   check((await request(other,{cookie:editor.cookie})).body.version,null);
+   const labeledSave=await request(other,{method:'PUT',cookie:editor.cookie,body:{baseRevision:0,service:labeled}});
+   check(labeledSave.body.version.service,labeled);
+   check((await request(other,{cookie:editor.cookie})).body.version.service,labeled);
    check((await request('/api/service',{cookie:editor.cookie})).body.version.revision,4);
    const datedConflict=await request(dated,{method:'PUT',cookie:operator.cookie,body:{baseRevision:0,service:remote}});
    check(datedConflict.status,409);check(datedConflict.body.current.service,service);

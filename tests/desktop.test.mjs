@@ -23,9 +23,10 @@ test('desktop workspace survives restarts, rejects invalid writes, keeps recover
   second.setItem('worshipui.setlists.v1',JSON.stringify(library));
   assert.deepEqual(JSON.parse(openDeviceStore(directory).getItem('worshipui.setlists.v1')),library);
   assert.throws(()=>second.setItem('worshipui.setlists.v1',JSON.stringify({...library,active:'2026-02-30'})),/Invalid setlist library/);
-  const songLibrary={version:1,songs:[{id:'one',title:'Song',type:'Song',theme:'dusk',slides:['Verse']}]};
+  const songLibrary={version:1,songs:[{id:'one',title:'Song',type:'Song',theme:'dusk',slides:['Verse'],sectionLabels:['Verse 1']}]};
   second.setItem('worshipui.songs.v1',JSON.stringify(songLibrary));
   assert.deepEqual(JSON.parse(openDeviceStore(directory).getItem('worshipui.songs.v1')),songLibrary);
+  assert.throws(()=>second.setItem('worshipui.songs.v1',JSON.stringify({version:1,songs:[{...songLibrary.songs[0],sectionLabels:[]}]})),/Invalid song library/);
   assert.throws(()=>second.setItem('worshipui.songs.v1',JSON.stringify({version:1,songs:[service.items[0]]})),/Invalid song library/);
   const misaligned={title:'Scripture',items:[{id:'verse',title:'John 3:16',type:'Scripture',theme:'dusk',slides:['One','Two'],primaryVersion:'ESV',secondaryVersion:'NIV',secondarySlides:['Uno']}]};
   assert.throws(()=>second.setItem(key,JSON.stringify(misaligned)),/Invalid service/);

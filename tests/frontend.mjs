@@ -16,9 +16,9 @@ export async function frontendTests(){
    function element(){return {value:'',open:false,style:{setProperty(key,value){this[key]=value}},children:[],textContent:'',append(...children){this.children.push(...children)},replaceChildren(){this.children=[]},setAttribute(){},showModal(){this.open=true},close(){this.open=false},click(){return this.onclick?.()},innerHTML:''}}
    const node=id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id)};
    let remote={revision:1,service:clone(initial),author:'home',savedAt:new Date().toISOString()};
-   const listeners=new Map();
+   const listeners=new Map(),documentListeners=new Map();
    const context={console,URLSearchParams,location:{search:''},structuredClone:clone,crypto:{randomUUID:()=>Math.random().toString()},Blob,Event:class{constructor(type){this.type=type}},
-     document:{getElementById:node,createElement:element,querySelector:()=>node('aside'),body:element(),activeElement:null,addEventListener(){}},
+     document:{getElementById:node,createElement:element,querySelector:selector=>selector==='dialog[open]'?null:node('aside'),body:element(),activeElement:null,addEventListener(type,fn){documentListeners.set(type,fn)}},
      localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},navigator:{},AbortSignal:{timeout(){}},
      confirm:()=>true,setInterval:fn=>intervals.push(fn),setTimeout:()=>1,clearTimeout(){},
      addEventListener(type,fn){listeners.set(type,fn)},dispatchEvent(event){listeners.get(event.type)?.(event)},
@@ -40,7 +40,7 @@ export async function frontendTests(){
      }};
    context.window=context;vm.createContext(context);sources.forEach(source=>vm.runInContext(source,context));
    await new Promise(resolve=>setTimeout(resolve,0));
-   return {nodes,node,storage,context,setRemote:v=>remote=v,setDated:(date,v)=>dated.set(date,v),getDated:date=>dated.get(date),setOnline:v=>online=v,async poll(){await intervals[0]();await new Promise(resolve=>setTimeout(resolve,0))}};
+   return {nodes,node,storage,context,keydown:event=>documentListeners.get('keydown')(event),setRemote:v=>remote=v,setDated:(date,v)=>dated.set(date,v),getDated:date=>dated.get(date),setOnline:v=>online=v,async poll(){await intervals[0]();await new Promise(resolve=>setTimeout(resolve,0))}};
  }
  const church=await client();
  check(church.node('order').children.length,1);
@@ -146,14 +146,70 @@ export async function frontendTests(){
  const content=await client('operator',false);
  content.node('add').onclick();content.node('titleInput').value='Local song';content.node('textInput').value='First slide\n\nSecond slide';
  content.node('saveSongTemplate').onclick();check(JSON.parse(content.storage.get('worshipui.songs.v1')).songs.length,1);
+ check(content.node('songResults').children.length,0);check(content.node('songStatus').textContent,'Song saved to this device’s library.');
+ content.node('songSearch').value='  ';content.node('songSearch').oninput();check(content.node('songResults').children.length,0);
  content.node('songSearch').value='Local';content.node('songSearch').oninput();check(content.node('songResults').children.length,1);
  content.node('songResults').children[0].onclick();content.node('itemForm').onsubmit({preventDefault(){}});
  check(content.context.worshipWorkspace.getService().items[1].title,'Local song');
  content.node('add').onclick();await content.node('songFile').onchange({target:{files:[{name:'Imported.txt',size:11,text:async()=>'Verse text'}],value:'Imported.txt'}});
  check(JSON.parse(content.storage.get('worshipui.songs.v1')).songs.length,2);
- content.node('typeInput').value='Scripture';content.node('typeInput').onchange();content.node('bibleQuery').value='John 3:16-17';await content.node('searchBible').onclick();
- check(content.node('bibleResults').children.length,1);content.node('bibleResults').children[0].onclick();
- check(content.node('itemPrimaryVersion').value,'KJV');content.node('itemForm').onsubmit({preventDefault(){}});
- check(content.context.worshipWorkspace.getService().items.at(-1).slides.length,2);
+ content.node('typeInput').value='Scripture';await content.node('typeInput').onchange();
+ check(content.node('bibleBook').children.length,66);
+ content.node('bibleBook').value='JOH';content.node('bibleBook').onchange();
+ content.node('bibleChapter').value='3';content.node('bibleChapter').onchange();
+ content.node('bibleFirst').value='16';content.node('bibleFirst').onchange();content.node('bibleLast').value='17';content.node('addBiblePassage').onclick();
+ check(content.context.worshipWorkspace.getService().items.at(-1).primaryVersion,'KJV');
+ check(content.context.worshipWorkspace.getService().items.at(-1).slides.length,2);check(content.node('itemDialog').open,false);
+ content.node('edit').onclick();content.node('addBiblePassage').onclick();
+ check(content.node('itemPrimaryVersion').value,'KJV');check(content.node('itemDialog').open,true);
+ content.node('add').onclick();content.node('typeInput').value='Scripture';content.node('typeInput').onchange();
+ check(content.node('titleInput').required,false);content.node('titleInput').value='';content.node('textInput').value='Scripture text';
+ content.node('itemForm').onsubmit({preventDefault(){}});check(content.context.worshipWorkspace.getService().items.at(-1).title,'Scripture');
+ content.node('add').onclick();check(content.node('titleInput').required,true);
+ content.node('scriptureVersion').value='KJV';content.node('scriptureReference').value='';content.node('scriptureText').value='Verse text';
+ content.node('scriptureText').oninput();check(content.node('addScripture').disabled,false);content.node('addScripture').onclick();
+ check(content.context.worshipWorkspace.getService().items.at(-1).title,'Scripture · KJV');
+ const combined=await client('operator',false);
+ combined.node('add').onclick();combined.node('typeInput').value='Scripture';await combined.node('typeInput').onchange();
+ combined.node('bibleBook').value='JOH';combined.node('bibleBook').onchange();combined.node('bibleChapter').value='3';combined.node('bibleChapter').onchange();
+ combined.node('bibleFirst').value='16';combined.node('bibleFirst').onchange();combined.node('bibleLast').value='17';combined.node('bibleLayout').value='combined';combined.node('addBiblePassage').onclick();
+ const passage=combined.context.worshipWorkspace.getService().items.at(-1);
+ check(passage.slides.length,1);check(passage.slides[0].includes('John 3:16 · KJV'),true);check(passage.slides[0].includes('John 3:17 · KJV'),true);check(passage.fitText,true);
+ combined.node('take').onclick();check(JSON.parse(combined.storage.get(liveKey)).fitText,true);
+ combined.node('edit').onclick();combined.node('itemForm').onsubmit({preventDefault(){}});check(combined.context.worshipWorkspace.getService().items.at(-1).slides.length,1);check(combined.context.worshipWorkspace.getService().items.at(-1).fitText,true);
+ combined.node('scriptureVersion').value='KJV';combined.node('scriptureText').value='First verse\n\nSecond verse';combined.node('scriptureLayout').value='combined';
+ combined.node('secondaryScriptureVersion').value='Other';combined.node('secondaryScriptureText').value='First translation\n\nSecond translation';
+ combined.node('addScripture').onclick();const paired=combined.context.worshipWorkspace.getService().items.at(-1);
+ check(paired.slides,['First verse\nSecond verse']);check(paired.secondarySlides,['First translation\nSecond translation']);check(paired.fitText,true);
+ combined.node('scriptureText').value='a'.repeat(15000)+'\n\n'+'b'.repeat(10000);combined.node('secondaryScriptureVersion').value='';combined.node('secondaryScriptureText').value='';
+ const count=combined.context.worshipWorkspace.getService().items.length;combined.node('addScripture').onclick();check(combined.context.worshipWorkspace.getService().items.length,count);check(combined.node('scriptureImportStatus').textContent.includes('20,000'),true);
+ const keys=await client('operator',false);
+ const space=target=>keys.keydown({target,key:' ',preventDefault(){},repeat:false});
+ space({tagName:'DIV'});check(JSON.parse(keys.storage.get(liveKey)).text,'Original verse');
+ space(Object.assign(keys.node('take'),{tagName:'BUTTON'}));check(JSON.parse(keys.storage.get(liveKey)).text,'Original chorus');
+ space({tagName:'DIV'});check(JSON.parse(keys.storage.get(liveKey)).text,'Original chorus');
+ keys.node('slides').children[0].onclick();keys.node('take').onclick();keys.node('blackout').onclick();space({tagName:'DIV'});
+ check(JSON.parse(keys.storage.get(liveKey)).text,'Original chorus');check(JSON.parse(keys.storage.get(liveKey)).black,true);
+ const sections=await client('operator',false);
+ sections.node('slides').children[0].oncontextmenu({preventDefault(){}});
+ check(sections.node('songSectionDialog').open,true);sections.node('songSectionChoice').value='Verse 1';sections.node('songSectionForm').onsubmit({preventDefault(){}});
+ check(sections.context.worshipWorkspace.getService().items[0].sectionLabels,['Verse 1','']);
+ check(sections.node('slides').children[0].children[1].textContent.includes('Verse 1'),true);
+ sections.node('slides').children[1].onclick();sections.node('songSection').onclick();sections.node('songSectionChoice').value='custom';sections.node('songSectionChoice').onchange();
+ check(sections.node('songSectionCustomLabel').hidden,false);sections.node('songSectionCustom').value='Chorus 2';sections.node('songSectionForm').onsubmit({preventDefault(){}});
+ check(sections.context.worshipWorkspace.getService().items[0].sectionLabels,['Verse 1','Chorus 2']);
+ sections.node('take').onclick();check(Object.hasOwn(JSON.parse(sections.storage.get(liveKey)),'sectionLabels'),false);
+ sections.node('edit').onclick();sections.node('textInput').value='Edited verse\n\nOriginal chorus\n\nNew slide';
+ sections.context.confirm=()=>false;sections.node('itemForm').onsubmit({preventDefault(){}});
+ check(sections.node('itemDialog').open,true);check(sections.context.worshipWorkspace.getService().items[0].sectionLabels,['Verse 1','Chorus 2']);
+ sections.context.confirm=()=>true;sections.node('cancel').onclick();
+ sections.node('edit').onclick();sections.node('textInput').value='Original chorus\n\nOriginal verse';sections.node('itemForm').onsubmit({preventDefault(){}});
+ check(sections.context.worshipWorkspace.getService().items[0].sectionLabels,['Chorus 2','Verse 1']);
+ sections.node('edit').onclick();sections.node('saveSongTemplate').onclick();sections.node('cancel').onclick();
+ sections.node('add').onclick();check(sections.node('songResults').children.length,0);
+ sections.node('songSearch').value='Original';sections.node('songSearch').oninput();sections.node('songResults').children[0].onclick();sections.node('itemForm').onsubmit({preventDefault(){}});
+ check(sections.context.worshipWorkspace.getService().items.at(-1).sectionLabels,['Chorus 2','Verse 1']);
+ sections.node('edit').onclick();sections.node('typeInput').value='Announcement';sections.node('typeInput').onchange();sections.node('itemForm').onsubmit({preventDefault(){}});
+ check(Object.hasOwn(sections.context.worshipWorkspace.getService().items.at(-1),'sectionLabels'),false);
  return checks;
 }

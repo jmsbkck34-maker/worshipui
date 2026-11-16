@@ -40,16 +40,17 @@
   <div class="editor-top"><div><div class="eyebrow">PREPARE & PRESENT</div><h1 id="selectedTitle"></h1></div><button id="edit">Edit item</button></div>
   <div class="editor-meta"><span id="itemType"></span><span>Choose a slide, then take it live</span></div>
   <div id="slides" class="slides"></div>
+  <button id="songSection" type="button" hidden>Set selected slide section</button>
   <div class="theme-panel">
    <div><strong>Edit slide template</strong><p id="templateSummary">Background and text for this item</p><button id="templateEdit">Edit slide template</button></div>
    <div id="themes" class="themes"></div>
   </div>
-  <div class="tip"><span>⌨</span><div><strong>Room to focus on worship.</strong><p>Arrow keys move the preview. Space takes it live. B blacks out the screen.</p></div></div>
+  <div class="tip"><span>⌨</span><div><strong>Room to focus on worship.</strong><p>Arrow keys move the preview. Space takes it live, then advances the live slide. B blacks out the screen.</p></div></div>
  </section>
  <section class="monitor">
   <div class="section-label">PREVIEW <span>NOT ON SCREEN</span></div>
   <div id="preview" class="screen"></div>
-  <button id="take" class="primary">Take live <span>Space ↵</span></button>
+  <button id="take" class="primary">Take live <span>Space →</span></button>
   <div class="section-label live-label"><span><i class="status-dot"></i> LIVE OUTPUT</span><span id="liveStatus">READY</span></div>
   <div id="live" class="screen"></div>
   <div class="transport"><button id="previous" aria-label="Previous slide">← Previous</button><button id="next">Next →</button></div>
@@ -84,6 +85,15 @@
   </section>
  </div>
  <div class="dialog-actions"><button class="primary" id="closeTemplate">Done</button></div>
+</dialog>
+<dialog id="songSectionDialog" aria-labelledby="songSectionTitle">
+ <form id="songSectionForm">
+  <h2 id="songSectionTitle">Song slide section</h2>
+  <p class="subtle">This label is for the editor only; it will not appear on the audience or stage display.</p>
+  <label>Section<select id="songSectionChoice"><option value="">No label</option><option>Verse</option><option>Verse 1</option><option>Verse 2</option><option>Verse 3</option><option>Verse 4</option><option>Chorus</option><option>Pre-Chorus</option><option>Bridge</option><option>Intro</option><option>Outro</option><option>Tag</option><option>Instrumental</option><option value="custom">Custom</option></select></label>
+  <label id="songSectionCustomLabel" hidden>Custom section<input id="songSectionCustom" maxlength="50"></label>
+  <div class="dialog-actions"><button id="cancelSongSection" type="button">Cancel</button><button class="primary" type="submit">Save section</button></div>
+ </form>
 </dialog>
 <dialog id="settingsDialog" aria-labelledby="settingsTitle">
  <div class="settings-top">
@@ -136,16 +146,17 @@
   <p class="subtle">The text must come from a source you are authorized to use. Paste it or import a text, CSV, USFM, or USX file; imported text is saved with this service.</p>
   <div class="scripture-fields">
    <label>Bible version<select id="scriptureVersion"><option value="NIV">New International Version (NIV)</option><option value="ESV">English Standard Version (ESV)</option><option value="KJV">King James Version (KJV)</option><option value="NLT">New Living Translation (NLT)</option><option value="NKJV">New King James Version (NKJV)</option><option value="CSB">Christian Standard Bible (CSB)</option><option value="NIRV">New International Reader’s Version (NIrV)</option><option value="NRSV">New Revised Standard Version (NRSV)</option><option value="NASB">New American Standard Bible (NASB)</option><option value="MSG">The Message (MSG)</option></select></label>
-   <label>Passage reference<input id="scriptureReference" maxlength="100" placeholder="e.g. John 3:16–17"></label>
+   <label>Passage reference (optional)<input id="scriptureReference" maxlength="100" placeholder="e.g. John 3:16–17"></label>
   </div>
   <p class="subtle">English-only list: nine English entries from the ECPA 2025 bestseller top ten, with The Message in place of the Spanish Reina-Valera. This is not a strict sales ranking.</p>
   <label>Scripture text<textarea id="scriptureText" rows="5" placeholder="Paste authorized text here. Separate slides or verses with a blank line."></textarea></label>
   <label>Or import a Scripture file<input id="scriptureFile" type="file" accept=".txt,.csv,.usfm,.sfm,.usx"></label>
+  <label>Slide layout<select id="scriptureLayout"><option value="verses">One verse per slide</option><option value="combined">All verses on one slide · auto-fit text</option></select></label>
   <label>Second translation / language (optional)<input id="secondaryScriptureVersion" maxlength="80" placeholder="e.g. Reina-Valera 1960"></label>
   <label>Second translation text<textarea id="secondaryScriptureText" rows="5" placeholder="Paste the same passage in the second language. Separate matching verses with blank lines."></textarea></label>
   <label>Or import the second translation file<input id="secondaryScriptureFile" type="file" accept=".txt,.csv,.usfm,.sfm,.usx"></label>
   <p id="secondaryScriptureStatus" role="status">Optional: use blank lines to align each slide in both languages.</p>
-  <p id="scriptureImportStatus" role="status">Choose a version and passage, then paste or select a file.</p>
+  <p id="scriptureImportStatus" role="status">Choose a version, then paste or select a file.</p>
   <button id="addScripture" type="button" class="primary" disabled>Add Scripture to service</button>
  </section>
 </dialog>
@@ -164,13 +175,16 @@
    <p id="songStatus" role="status">Search saved songs, import an authorized file, or enter a new song below.</p>
   </section>
   <section id="bibleTools" class="item-library" hidden>
-   <h3>Search the KJV Bible</h3>
-   <label>Passage or words<input id="bibleQuery" type="search" placeholder="John 3:16-18 or words"></label>
-   <button id="searchBible" type="button">Search KJV</button>
-   <div id="bibleResults" class="library-results"></div>
-   <p id="bibleStatus" role="status">Select a result to fill this Scripture item.</p>
+   <h3>Choose Scripture · KJV</h3>
+   <label>Book<select id="bibleBook" disabled></select></label>
+   <label>Chapter<select id="bibleChapter" disabled></select></label>
+   <label>First verse<select id="bibleFirst" disabled></select></label>
+   <label>Last verse<select id="bibleLast" disabled></select></label>
+   <label>Slide layout<select id="bibleLayout"><option value="verses">One verse per slide</option><option value="combined">All verses on one slide · auto-fit text</option></select></label>
+   <button id="addBiblePassage" type="button" disabled>Add selected passage</button>
+   <p id="bibleStatus" role="status">Choose a book, chapter and verse range. When editing, selection fills the item for review.</p>
   </section>
-  <label>Title<input id="titleInput" required maxlength="100"></label>
+  <label><span id="titleLabel">Title</span><input id="titleInput" required maxlength="100"></label>
   <label>Slide text<textarea id="textInput" rows="9" placeholder="Enter lyrics or text. Separate slides with a blank line." required></textarea></label>
   <button id="saveSongTemplate" type="button">Save song to library</button>
   <div id="translationFields" hidden>
