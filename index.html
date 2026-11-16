@@ -3,13 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Worship UI · Service workspace</title>
+<title>WorshipUI · Service workspace</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header>
- <a class="brand" href="./">✦ <span>Worship<span class="muted">UI</span></span></a>
- <span class="workspace">SUNDAY WORKSPACE</span>
+ <div class="brand-block">
+  <a class="brand" href="./">✦ <span>Worship<span class="muted">UI</span></span></a>
+  <div class="language-toggle" role="group" aria-label="Main language"><button id="langEn" type="button" aria-pressed="true">English</button><button id="langEs" type="button" aria-pressed="false">Español</button></div>
+ </div>
+ <span class="workspace"><img id="headerLogo" alt="" hidden><span id="churchName">SUNDAY WORKSPACE</span></span>
  <div class="header-actions">
   <span id="saveState" role="status">Saved on this device</span>
   <button id="settings" type="button">Settings</button>
@@ -39,13 +42,14 @@
  <section class="editor">
   <div class="editor-top"><div><div class="eyebrow">PREPARE & PRESENT</div><h1 id="selectedTitle"></h1></div><button id="edit">Edit item</button></div>
   <div class="editor-meta"><span id="itemType"></span><span>Choose a slide, then take it live</span></div>
-  <div id="slides" class="slides"></div>
-  <button id="songSection" type="button" hidden>Set selected slide section</button>
   <div class="theme-panel">
    <div><strong>Edit slide template</strong><p id="templateSummary">Background and text for this item</p><button id="templateEdit">Edit slide template</button></div>
    <div id="themes" class="themes"></div>
   </div>
-  <div class="tip"><span>⌨</span><div><strong>Room to focus on worship.</strong><p>Arrow keys move the preview. Space takes it live, then advances the live slide. B blacks out the screen.</p></div></div>
+  <div id="slides" class="slides"></div>
+  <button id="songSection" type="button" hidden>Set selected slide section</button>
+  <div class="slide-screen-row"><label>Selected slide shows on<select id="slideScreen"><option value="">All screens</option><option value="1">Screen 1 only</option><option value="2">Screen 2 only</option></select></label><button id="slideScreenAll" type="button">Use for every slide in this item</button></div>
+  <div class="tip"><span>⌨</span><div><strong>Room to focus on worship.</strong><p>Arrow keys move the preview. Double-click a slide or press Space to take it live; Space then advances the live slide. B blacks out the screen.</p></div></div>
  </section>
  <section class="monitor">
   <div class="section-label">PREVIEW <span>NOT ON SCREEN</span></div>
@@ -55,6 +59,12 @@
   <div id="live" class="screen"></div>
   <div class="transport"><button id="previous" aria-label="Previous slide">← Previous</button><button id="next">Next →</button></div>
   <div class="clear-controls"><button id="clear">Clear lyrics</button><button id="blackout" aria-pressed="false">Blackout</button></div>
+  <div class="screens-panel">
+   <strong>Audience screens</strong>
+   <div class="screen-row"><span>Screen 1</span><select id="screen1Show" aria-label="Screen 1 shows"><option value="both">Both languages</option><option value="first">First language</option><option value="second">Second language</option></select><button id="openScreen1" type="button">Open</button></div>
+   <div class="screen-row"><span>Screen 2</span><select id="screen2Show" aria-label="Screen 2 shows"><option value="both">Both languages</option><option value="first">First language</option><option value="second">Second language</option></select><button id="openScreen2" type="button">Open</button></div>
+   <p class="subtle">With two projectors, show English on one and Spanish on the other. Slides can also be sent to one screen only.</p>
+  </div>
   <div class="readiness"><strong>Before you begin</strong><p id="ready"></p><p>Open Audience, move that window to your projector, then enter fullscreen. Open Stage for current and next text.</p></div>
  </section>
 </main>
@@ -84,6 +94,22 @@
    <p class="subtle">Size is measured on a 1920-pixel-wide slide and scales with your screen. Fonts marked “included” are bundled for offline use. Other fonts use those installed on each computer.</p>
   </section>
  </div>
+ <section class="text-position">
+  <h3>Text position</h3>
+  <div id="templatePreview" class="screen template-preview" title="Drag to move the text box"></div>
+  <div class="text-position-controls">
+   <label>Left – right<input id="textX" type="range" min="0" max="100" step="1" value="50"></label>
+   <label>Up – down<input id="textY" type="range" min="0" max="100" step="1" value="50"></label>
+   <label>Box width<input id="textWidth" type="range" min="20" max="100" step="1" value="90"></label>
+   <button id="resetTextPosition" type="button">Center text</button>
+  </div>
+  <p class="subtle">Drag the text on the preview, or use the sliders. Applies to every slide in this item.</p>
+ </section>
+ <section id="verseLayoutSection" class="verse-layout" hidden>
+  <h3>Verses</h3>
+  <button id="verseLayout" type="button">All verses on one slide</button>
+  <p id="verseLayoutStatus" class="subtle" role="status"></p>
+ </section>
  <div class="dialog-actions"><button class="primary" id="closeTemplate">Done</button></div>
 </dialog>
 <dialog id="songSectionDialog" aria-labelledby="songSectionTitle">
@@ -97,17 +123,44 @@
 </dialog>
 <dialog id="settingsDialog" aria-labelledby="settingsTitle">
  <div class="settings-top">
-  <div><div class="eyebrow">CONTENT SOURCES</div><h2 id="settingsTitle">Lyrics & Scripture</h2></div>
+  <div><div class="eyebrow">CHURCH & CONTENT SOURCES</div><h2 id="settingsTitle">Settings</h2></div>
   <button id="closeSettings" type="button">Done</button>
  </div>
- <p class="subtle">SongSelect opens the CCLI service for lyrics. Bible text can be pasted or imported from a source you are authorized to use. Worship UI does not sign in or fetch licensed text.</p>
+ <section class="provider-section branding-section">
+  <h3>Church branding</h3>
+  <div id="brandingConflict" class="branding-conflict" hidden>
+   <p>Branding was changed on another computer while you had unsaved changes. Choose which to keep.</p>
+   <button id="useSharedBranding" type="button">Use shared branding</button>
+   <button id="keepLocalBranding" type="button">Keep mine and share it</button>
+  </div>
+  <div class="branding-grid">
+   <div>
+    <label>Church name<input id="brandName" maxlength="100" placeholder="Grace Community Church"></label>
+    <label>Address<textarea id="brandAddress" rows="3" maxlength="300" placeholder="Street, city, state"></textarea></label>
+   </div>
+   <div>
+    <div class="logo-preview"><img id="brandLogoPreview" alt="Church logo preview" hidden><span id="brandLogoEmpty">No logo</span></div>
+    <label class="button">Upload logo<input id="brandLogo" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>
+    <button id="removeBrandLogo" type="button" hidden>Remove logo</button>
+    <label class="check-row"><input id="brandBlackout" type="checkbox" checked> Show logo on the audience screen during blackout</label>
+   </div>
+  </div>
+  <button id="saveBranding" class="primary" type="button">Save branding</button>
+  <p id="brandingStatus" class="subtle" role="status">Shared with your other computers when signed in.</p>
+ </section>
+ <section class="provider-section language-section">
+  <h3>Second language</h3>
+  <label>Default second translation<select id="secondLanguage"></select></label>
+  <p id="secondLanguageStatus" class="subtle" role="status">Used for the second translation when choosing Scripture.</p>
+ </section>
+ <p class="subtle">SongSelect opens the CCLI service for lyrics. Bible text can be pasted or imported from a source you are authorized to use. WorshipUI does not sign in or fetch licensed text.</p>
  <div class="settings-grid">
   <section class="provider-section">
    <h3>Lyrics</h3>
    <article class="provider-card">
     <div><strong>CCLI SongSelect</strong><span class="source-badge">Included with an active Church Copyright License</span></div>
-    <p>SongSelect provides lyrics to eligible CCLI license holders. Sign in at CCLI to search and retrieve songs; Worship UI links there and does not import lyrics automatically.</p>
-    <a href="https://www.songselect.ccli.com/" target="_blank" rel="noopener noreferrer">Open SongSelect</a>
+    <p>SongSelect provides lyrics to eligible CCLI license holders. Sign in at CCLI to search and retrieve songs; WorshipUI links there and does not import lyrics automatically.</p>
+    <a href="https://songselect.ccli.com/" target="_blank" rel="noopener noreferrer">Open SongSelect</a>
    </article>
   </section>
   <section class="provider-section">
@@ -162,6 +215,7 @@
 </dialog>
 <dialog id="itemDialog">
  <form id="itemForm">
+  <div class="dialog-actions dialog-actions-top"><button type="button" id="delete">Delete item</button><span></span><button type="button" id="cancel">Cancel</button><button class="primary" type="submit">Save item</button></div>
   <div class="eyebrow">SERVICE ITEM</div>
   <h2 id="dialogTitle">Add to your service</h2>
   <label>Type<select id="typeInput"><option>Song</option><option>Scripture</option><option>Announcement</option><option>Sermon</option></select></label>
@@ -171,16 +225,24 @@
    <div id="songResults" class="library-results"></div>
    <label class="button">Import a song file<input id="songFile" type="file" accept=".txt,.pro,.chopro,.chordpro,.xml,.csv" hidden></label>
    <button id="openSongFolder" type="button" hidden>Open song folder</button>
-   <a href="https://www.songselect.ccli.com/" target="_blank" rel="noopener noreferrer">Open SongSelect</a>
+   <a href="https://songselect.ccli.com/" target="_blank" rel="noopener noreferrer">Open SongSelect</a>
    <p id="songStatus" role="status">Search saved songs, import an authorized file, or enter a new song below.</p>
   </section>
   <section id="bibleTools" class="item-library" hidden>
-   <h3>Choose Scripture · KJV</h3>
+   <h3>Choose Scripture</h3>
+   <label>Version<select id="bibleVersion"></select></label>
    <label>Book<select id="bibleBook" disabled></select></label>
    <label>Chapter<select id="bibleChapter" disabled></select></label>
    <label>First verse<select id="bibleFirst" disabled></select></label>
    <label>Last verse<select id="bibleLast" disabled></select></label>
    <label>Slide layout<select id="bibleLayout"><option value="verses">One verse per slide</option><option value="combined">All verses on one slide · auto-fit text</option></select></label>
+   <div id="youVersionTools" class="youversion-tools" hidden>
+    <label>YouVersion translation<select id="youVersionId"></select></label>
+    <button id="openYouVersion" type="button">Open passage in YouVersion</button>
+    <label>Paste the verses copied from YouVersion<textarea id="youVersionText" rows="5" placeholder="On bible.com, select the verses (include the verse numbers for one slide per verse), copy, then paste here."></textarea></label>
+    <p class="subtle">Verse numbers in the pasted text give one slide per verse; without them the passage becomes one auto-fit slide. Check the translation’s copyright terms for projection and streaming.</p>
+   </div>
+   <button id="bibleSecond" type="button" aria-pressed="false" hidden>+ Add second language</button>
    <button id="addBiblePassage" type="button" disabled>Add selected passage</button>
    <p id="bibleStatus" role="status">Choose a book, chapter and verse range. When editing, selection fills the item for review.</p>
   </section>
@@ -191,10 +253,11 @@
    <label>Primary translation / version<input id="itemPrimaryVersion" maxlength="80"></label>
    <label>Second translation / language<input id="itemSecondaryVersion" maxlength="80"></label>
    <label>Second translation text<textarea id="itemSecondaryText" rows="5" placeholder="Separate matching verses with blank lines."></textarea></label>
+   <button id="fillSecondLanguage" type="button" hidden>+ Add second language</button>
+   <p id="fillSecondStatus" class="subtle" role="status"></p>
    <p class="subtle">Both translations appear side by side. Leave the second translation blank for a single-language slide.</p>
   </div>
   <p class="subtle">Separate slides with a blank line. Use lyrics and Bible translations you have permission to display.</p>
-  <div class="dialog-actions"><button type="button" id="delete">Delete item</button><span></span><button type="button" id="cancel">Cancel</button><button class="primary" type="submit">Save item</button></div>
  </form>
 </dialog>
 <div id="toast" role="status"></div>

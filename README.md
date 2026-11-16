@@ -1,4 +1,4 @@
-# Worship UI
+# WorshipUI
 
 Local-first service preparation and presentation, with shared revision-based editing for a home editor and a church operator.
 
@@ -56,7 +56,7 @@ With Node.js 22+: `npm test`. Tests cover authentication, protected data files, 
 
 Choose **Add service item** and select **Song** to search the local song library, save an entered song as a reusable template, or import an authorized TXT, ChordPro, OpenLyrics XML, or CSV file. Saved songs appear after you enter a search term. Right-click a song slide, or select it and choose **Set selected slide section**, to label it Verse, Chorus, Bridge, or another section. Labels appear only in the editor and are saved with the service and manually saved templates. Imported files are copied into the desktop app's `songs` folder under its user-data directory; **Open song folder** opens it. Save a SongSelect download there or elsewhere and then select it with **Import a song file**. The app cannot change an external browser's download destination. The song library and files remain on this device; a song added to a service is included in that service's exports and shared revisions.
 
-Use **Open SongSelect** or **Settings** for a direct link to [CCLI SongSelect](https://www.songselect.ccli.com/). SongSelect access to lyrics is included for churches with an active [CCLI Church Copyright License](https://ccli.com/us/en+songselect/church-copyright-license); it is not an unrestricted free catalog. Worship UI does not sign in to SongSelect or fetch lyrics. Check imported title, writer, and copyright notices before display.
+Use **Open SongSelect** or **Settings** for a direct link to [CCLI SongSelect](https://songselect.ccli.com/). SongSelect access to lyrics is included for churches with an active [CCLI Church Copyright License](https://ccli.com/us/en+songselect/church-copyright-license); it is not an unrestricted free catalog. WorshipUI does not sign in to SongSelect or fetch lyrics. Check imported title, writer, and copyright notices before display.
 
 Settings can store Church Copyright, Streaming, Streaming Plus, and Rehearsal license numbers on the current device. When configured, the Church Copyright number is shown as `CCLI License #...` on Song slides; the other numbers are stored but not printed. These numbers are not included in service exports or shared revisions. Follow CCLI's current terms and keep required song title, writer, and copyright notices with reproduced lyrics.
 
@@ -79,9 +79,9 @@ Songs, imported or manually entered Scripture, announcements, sermons, gradient 
 
 ## Windows desktop app (church computer)
 
-The generated installer is `release/WorshipUI-Setup-0.3.2.exe`. Install on Windows x64 and launch Worship UI from the desktop shortcut. The full interface is bundled; no Node.js installation, browser cache, internet access, or sign-in is required to prepare and present a local service. The preview can also be launched from `release/win-unpacked/Worship UI.exe` without installing it; keep that whole folder intact.
+The generated installer is `release/WorshipUI-Setup-0.3.2.exe`. Install on Windows x64 and launch WorshipUI from the desktop shortcut. The full interface is bundled; no Node.js installation, browser cache, internet access, or sign-in is required to prepare and present a local service. The preview can also be launched from `release/win-unpacked/WorshipUI.exe` without installing it; keep that whole folder intact.
 
-The desktop app stores its service, sync baseline, and recovery snapshots under the Windows user profile in `Worship UI/workspace/device.json` inside the app's Roaming AppData folder. Each successful save atomically replaces the file and retains the previous workspace as `device.previous.json`. Do not edit these files while the app is running. A corrupt current file produces an error rather than silently replacing your service. Export JSON backups to another drive before important services. Uninstalling retains the workspace; the file store is separate from the installation directory.
+The desktop app stores its service, sync baseline, and recovery snapshots under the Windows user profile in `WorshipUI/workspace/device.json` inside the app's Roaming AppData folder. Each successful save atomically replaces the file and retains the previous workspace as `device.previous.json`. Do not edit these files while the app is running. A corrupt current file produces an error rather than silently replacing your service. Export JSON backups to another drive before important services. Uninstalling retains the workspace; the file store is separate from the installation directory.
 
 To move a service from the browser prototype: use **Export** there, launch the desktop app, and choose **Import**. The desktop has its own workspace and does not automatically read another browser's storage.
 
@@ -117,3 +117,29 @@ Templates and embedded images are included in local saves, desktop recovery file
 Choose one of six built-in **Motion backgrounds**: Aurora Drift, Ocean Flow, Warm Glow, Quiet Clouds, Starfield, or Light Rays. These are locally generated animated backgrounds, not streamed videos. They appear in slide thumbnails, preview, and audience output, with text remaining still. **Animate background** can pause the motion, and the operating system's reduced-motion setting keeps the backgrounds static. Motion choices, pause state, and fonts save in the service, export/import, recovery files, and shared revisions. Existing templates remain compatible.
 
 Selecting a motion background changes the prepared item only; the current audience snapshot stays unchanged until **Take live**. Clear lyrics leaves the motion running; Blackout removes the motion and shows black. Update the shared backend from the same version before syncing motion templates. The Windows installer for this version is under `release/0.3.2/`.
+
+## Branding, text position and quick live (0.3.3)
+
+**Settings → Church branding** stores the church name, address and logo (PNG, JPEG or WebP, resized to fit 800×800 and embedded). The name and logo appear in the workspace header. When **Show logo on the audience screen during blackout** is on, Blackout shows the logo centered on black instead of an empty screen. Branding is saved on each computer and, when signed in, shared through `/api/branding` with the same revision checks as services. If two computers change branding before syncing, Settings asks which copy to keep; nothing is overwritten silently. Branding is not synced while Live mode is on.
+
+**Edit slide template → Text position** moves the text box: drag the text on the preview or use the left–right, up–down and width sliders. **Center text** restores the default layout. The position applies to every slide in the item and to the audience screen; the stage screen stays centered.
+
+**Edit slide template → Verses** switches a Scripture item between one verse per slide and all verses on one auto-fit slide. Passages combined before this version cannot be split again; re-add them to use the button.
+
+Importing a song file shows it in the song search and loads it into the editor. SongSelect text files use the first line as the title, turn “Verse 1”, “Chorus” and similar headers into section labels, and keep the CCLI credit block as a final slide labelled “Copyright”.
+
+Double-click a slide thumbnail to take it live. A single click still only changes the preview.
+
+## Scripture versions and second language
+
+Add item → Scripture offers the bundled **KJV** or **Another version · YouVersion**. For another version, choose the YouVersion translation and the passage, select **Open passage in YouVersion** (bible.com opens in the system browser), copy the verses there and paste them back. Pasted text that includes verse numbers becomes one slide per verse; without them the passage becomes one auto-fit slide. YouVersion has no export, so text comes back by copy and paste. Check each translation’s copyright terms for projection and streaming.
+
+**Settings → Second language** chooses the default second language (Spanish to start). While adding Scripture, **+ Add Spanish · RVR1909** adds the same verses from the bundled Reina-Valera 1909 as the second translation, aligned verse for verse. It is off until pressed for each passage. Languages without a bundled public-domain Bible do not show the button yet.
+
+Bundled texts (KJV, WEB, Reina-Valera 1909) are public domain; see `assets/bibles/NOTICE.txt`. `tools/bible-text-to-vpl.mjs` converts other Bible SuperSearch plain-text exports to the app’s format.
+
+## Main language and audience screens
+
+The **English / Español** toggle under the WorshipUI name sets the main language. With Spanish as main, the bundled Bible is Reina-Valera 1909, book names appear in Spanish, YouVersion lists Spanish translations first, and the second-language buttons add English (KJV). With English as main, the second language comes from Settings.
+
+The live column's **Audience screens** panel opens Screen 1 and Screen 2 and sets what each shows: both languages, the first language only, or the second only — for example English on one projector and Spanish on the other. **Selected slide shows on** sends a slide to all screens or to one screen; the other screen keeps what it was showing. Blackout and Clear lyrics apply to every screen. The header **Audience** button opens Screen 1.

@@ -1,7 +1,8 @@
 import {readFileSync,writeFileSync,renameSync,existsSync,mkdirSync} from 'node:fs';
 import path from 'node:path';
 import {validService} from '../server.mjs';
-const KEYS=new Set(['worshipui.service.v1','worshipui.sync.v1','worshipui.recovery.v1','worshipui.ccli.v1','worshipui.setlists.v1','worshipui.songs.v1']);
+import SlideTemplate from '../slide-template.cjs';
+const KEYS=new Set(['worshipui.service.v1','worshipui.sync.v1','worshipui.recovery.v1','worshipui.ccli.v1','worshipui.setlists.v1','worshipui.songs.v1','worshipui.branding.v1','worshipui.language.v1','worshipui.screens.v1']);
 const CCLI_FIELDS=['churchCopyright','streaming','streamingPlus','rehearsal'];
 function validCcliSettings(value){return value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===CCLI_FIELDS.length&&CCLI_FIELDS.every(key=>typeof value[key]==='string'&&value[key].length<=80)}
 function validDate(value){if(!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value))return false;const date=new Date(value+'T00:00:00Z');return Number.isFinite(date.getTime())&&date.toISOString().slice(0,10)===value}
@@ -28,6 +29,9 @@ export function openDeviceStore(directory){
    if(key==='worshipui.service.v1'&&!validService(parsed))throw Error('Invalid service');
    if(key==='worshipui.ccli.v1'&&!validCcliSettings(parsed))throw Error('Invalid CCLI settings');
    if(key==='worshipui.setlists.v1'&&!validLibrary(parsed))throw Error('Invalid setlist library');
+   if(key==='worshipui.branding.v1'&&!SlideTemplate.validBrandingRecord(parsed))throw Error('Invalid branding');
+   if(key==='worshipui.screens.v1'&&!(parsed&&parsed.version===1&&Array.isArray(parsed.screens)&&parsed.screens.length===2&&parsed.screens.every(screen=>screen&&['both','first','second'].includes(screen.show))))throw Error('Invalid screen settings');
+   if(key==='worshipui.language.v1'&&!(parsed&&parsed.version===1&&typeof parsed.secondLanguage==='string'&&/^[a-z]{2,3}$/.test(parsed.secondLanguage)&&(parsed.mainLanguage===undefined||['en','es'].includes(parsed.mainLanguage))))throw Error('Invalid language setting');
    if(key==='worshipui.songs.v1'&&(!parsed||parsed.version!==1||!Array.isArray(parsed.songs)||parsed.songs.length>10000||new Set(parsed.songs.map(song=>song?.id)).size!==parsed.songs.length||parsed.songs.some(song=>!song||song.type!=='Song'||!validService({title:'',items:[song]}))))throw Error('Invalid song library');
    const next={...values,[key]:value};
    const encoded=JSON.stringify(next);

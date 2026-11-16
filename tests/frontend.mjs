@@ -4,10 +4,13 @@ import vm from 'node:vm';
 const clone=value=>JSON.parse(JSON.stringify(value));
 export async function frontendTests(){
  const html=await readFile(new URL('../index.html',import.meta.url),'utf8');
- assert.match(html,/href="https:\/\/www\.songselect\.ccli\.com\/"/);
+ // www.songselect.ccli.com has no valid certificate; the bare host does.
+ assert.match(html,/href="https:\/\/songselect\.ccli\.com\/"/);
+ assert.doesNotMatch(html,/www\.songselect/);
  assert.doesNotMatch(html,/id="lyricsFile"/);
  const sources=await Promise.all(['slide-template.cjs','content-import.js','bible-search.js','app.js','sync-core.js','sync.js'].map(file=>readFile(new URL('../'+file,import.meta.url),'utf8')));
  const kjv=await readFile(new URL('../assets/bibles/kjv.vpl.txt',import.meta.url),'utf8');
+ const rv1909=await readFile(new URL('../assets/bibles/rv1909.vpl.txt',import.meta.url),'utf8');
  const initial={title:'Sunday',items:[{id:'song',title:'Original',type:'Song',theme:'dusk',slides:['Original verse','Original chorus']}]};
  const key='worshipui.service.v1',liveKey='worshipui.live.v1',metaKey='worshipui.sync.v1';
  let checks=0;function check(a,b){assert.equal(JSON.stringify(a),JSON.stringify(b));checks++}
@@ -15,14 +18,14 @@ export async function frontendTests(){
    const nodes=new Map(),storage=savedStorage||new Map([[key,JSON.stringify(initial)],[metaKey,JSON.stringify({baseRevision:1,baseService:initial,live:false,role,username:role})]]),intervals=[],dated=new Map();
    function element(){return {value:'',open:false,style:{setProperty(key,value){this[key]=value}},children:[],textContent:'',append(...children){this.children.push(...children)},replaceChildren(){this.children=[]},setAttribute(){},showModal(){this.open=true},close(){this.open=false},click(){return this.onclick?.()},innerHTML:''}}
    const node=id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id)};
-   let remote={revision:1,service:clone(initial),author:'home',savedAt:new Date().toISOString()};
+   let remote={revision:1,service:clone(initial),author:'home',savedAt:new Date().toISOString()},brandingRemote=null;
    const listeners=new Map(),documentListeners=new Map();
    const context={console,URLSearchParams,location:{search:''},structuredClone:clone,crypto:{randomUUID:()=>Math.random().toString()},Blob,Event:class{constructor(type){this.type=type}},
      document:{getElementById:node,createElement:element,querySelector:selector=>selector==='dialog[open]'?null:node('aside'),body:element(),activeElement:null,addEventListener(type,fn){documentListeners.set(type,fn)}},
      localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},navigator:{},AbortSignal:{timeout(){}},
      confirm:()=>true,setInterval:fn=>intervals.push(fn),setTimeout:()=>1,clearTimeout(){},
      addEventListener(type,fn){listeners.set(type,fn)},dispatchEvent(event){listeners.get(event.type)?.(event)},
-     async fetch(url,options={}){if(url==='/assets/bibles/kjv.vpl.txt')return {ok:true,text:async()=>kjv};if(!online)throw Error('Offline');
+     async fetch(url,options={}){if(url==='/assets/bibles/kjv.vpl.txt')return {ok:true,text:async()=>kjv};if(url==='/assets/bibles/rv1909.vpl.txt')return {ok:true,text:async()=>rv1909};if(!online)throw Error('Offline');
        let response;
        if(url==='/api/me'||url==='/api/login')response={username:role,role};
        else if(url.startsWith('/api/setlists/')){
@@ -35,12 +38,16 @@ export async function frontendTests(){
          const body=JSON.parse(options.body);if(body.baseRevision!==remote.revision)return {ok:false,status:409,json:async()=>({current:clone(remote)})};
          remote={revision:remote.revision+1,service:body.service,author:role,savedAt:new Date().toISOString()};response={version:clone(remote)};
        }else if(url==='/api/service')response={version:clone(remote)};
+       else if(url==='/api/branding'&&options.method==='PUT'){
+         const body=JSON.parse(options.body);if(body.baseRevision!==(brandingRemote?.revision||0))return {ok:false,status:409,json:async()=>({current:clone(brandingRemote)})};
+         brandingRemote={revision:(brandingRemote?.revision||0)+1,branding:body.branding,author:role,savedAt:new Date().toISOString()};response={version:clone(brandingRemote)};
+       }else if(url==='/api/branding')response={version:clone(brandingRemote)};
        else throw Error('Unexpected API');
        return {ok:true,status:200,json:async()=>response};
      }};
    context.window=context;vm.createContext(context);sources.forEach(source=>vm.runInContext(source,context));
    await new Promise(resolve=>setTimeout(resolve,0));
-   return {nodes,node,storage,context,keydown:event=>documentListeners.get('keydown')(event),setRemote:v=>remote=v,setDated:(date,v)=>dated.set(date,v),getDated:date=>dated.get(date),setOnline:v=>online=v,async poll(){await intervals[0]();await new Promise(resolve=>setTimeout(resolve,0))}};
+   return {nodes,node,storage,context,keydown:event=>documentListeners.get('keydown')(event),setRemote:v=>remote=v,getBrandingRemote:()=>clone(brandingRemote),setBrandingRemote:v=>brandingRemote=v,setDated:(date,v)=>dated.set(date,v),getDated:date=>dated.get(date),setOnline:v=>online=v,async poll(){await intervals[0]();await new Promise(resolve=>setTimeout(resolve,0))}};
  }
  const church=await client();
  check(church.node('order').children.length,1);
@@ -181,6 +188,15 @@ export async function frontendTests(){
  combined.node('secondaryScriptureVersion').value='Other';combined.node('secondaryScriptureText').value='First translation\n\nSecond translation';
  combined.node('addScripture').onclick();const paired=combined.context.worshipWorkspace.getService().items.at(-1);
  check(paired.slides,['First verse\nSecond verse']);check(paired.secondarySlides,['First translation\nSecond translation']);check(paired.fitText,true);
+ check(combined.context.worshipWorkspace.getService().items.find(item=>item.id===passage.id).verseSlides.length,2);
+ const pairedIndex=combined.context.worshipWorkspace.getService().items.findIndex(item=>item.id===paired.id);
+ combined.node('order').children[pairedIndex].children[0].onclick();combined.node('templateEdit').onclick();
+ check(combined.node('verseLayoutSection').hidden,false);check(combined.node('verseLayout').textContent,'One verse per slide');
+ combined.node('verseLayout').onclick();let toggled=combined.context.worshipWorkspace.getService().items[pairedIndex];
+ check(toggled.slides,['First verse','Second verse']);check(toggled.secondarySlides,['First translation','Second translation']);check(toggled.fitText,undefined);check(toggled.verseSlides,undefined);
+ check(combined.node('verseLayout').textContent,'All verses on one slide');
+ combined.node('verseLayout').onclick();toggled=combined.context.worshipWorkspace.getService().items[pairedIndex];
+ check(toggled.slides,['First verse\nSecond verse']);check(toggled.verseSlides,['First verse','Second verse']);check(toggled.secondaryVerseSlides,['First translation','Second translation']);check(toggled.fitText,true);
  combined.node('scriptureText').value='a'.repeat(15000)+'\n\n'+'b'.repeat(10000);combined.node('secondaryScriptureVersion').value='';combined.node('secondaryScriptureText').value='';
  const count=combined.context.worshipWorkspace.getService().items.length;combined.node('addScripture').onclick();check(combined.context.worshipWorkspace.getService().items.length,count);check(combined.node('scriptureImportStatus').textContent.includes('20,000'),true);
  const keys=await client('operator',false);
@@ -211,5 +227,79 @@ export async function frontendTests(){
  check(sections.context.worshipWorkspace.getService().items.at(-1).sectionLabels,['Chorus 2','Verse 1']);
  sections.node('edit').onclick();sections.node('typeInput').value='Announcement';sections.node('typeInput').onchange();sections.node('itemForm').onsubmit({preventDefault(){}});
  check(Object.hasOwn(sections.context.worshipWorkspace.getService().items.at(-1),'sectionLabels'),false);
+ // Church branding saves locally, shares with revisions, and asks before overwriting another computer's change.
+ const settle=()=>new Promise(resolve=>setTimeout(resolve,20));
+ const brand=await client();await settle();
+ brand.node('brandName').value='Grace Church';brand.node('brandAddress').value='1 Main St';brand.node('saveBranding').onclick();await settle();
+ check(brand.node('churchName').textContent,'Grace Church');check(brand.getBrandingRemote().branding.name,'Grace Church');
+ check(JSON.parse(brand.storage.get('worshipui.branding.v1')).baseRevision,1);
+ brand.setBrandingRemote({revision:2,branding:{name:'Shared name',address:'',logo:'',showOnBlackout:true},author:'home',savedAt:new Date().toISOString()});
+ brand.node('brandName').value='Local name';brand.node('saveBranding').onclick();await settle();
+ check(brand.node('brandingConflict').hidden,false);check(brand.getBrandingRemote().branding.name,'Shared name');
+ brand.node('keepLocalBranding').onclick();await settle();
+ check(brand.getBrandingRemote().revision,3);check(brand.getBrandingRemote().branding.name,'Local name');check(brand.node('brandingConflict').hidden,true);
+ const logoRecord={version:1,branding:{name:'',address:'',logo:'data:image/png;base64,iVBORw0KGgo=',showOnBlackout:true},baseRevision:0,baseBranding:null};
+ const lit=await client('operator',false,new Map([[key,JSON.stringify(initial)],[metaKey,JSON.stringify({baseRevision:1,baseService:initial,live:false,role:'operator',username:'operator'})],['worshipui.branding.v1',JSON.stringify(logoRecord)]]));
+ check(lit.node('headerLogo').hidden,false);
+ lit.node('take').onclick();check(lit.node('live').children.some(child=>child.className==='blackout-logo'),false);
+ lit.node('blackout').onclick();check(lit.node('live').children.some(child=>child.className==='blackout-logo'),true);
+ // A single click previews a slide; a quick second click on the same slide takes it live.
+ const quick=await client('operator',false);
+ quick.node('slides').children[1].onclick();check(JSON.parse(quick.storage.get(liveKey)||'{}').text===undefined||JSON.parse(quick.storage.get(liveKey)).text!=='Original chorus',true);
+ quick.node('slides').children[1].onclick();check(JSON.parse(quick.storage.get(liveKey)).text,'Original chorus');
+ // The Bible picker adds the Spanish second translation by default, verse for verse.
+ const spanish=await client('operator',false);
+ check(spanish.node('secondLanguage').value,'es');
+ spanish.node('add').onclick();spanish.node('typeInput').value='Scripture';await spanish.node('typeInput').onchange();await settle();
+ check(spanish.node('bibleSecond').hidden,false);check(spanish.node('bibleSecond').textContent.startsWith('+ Add Spanish'),true);spanish.node('bibleSecond').onclick();check(spanish.node('bibleSecond').textContent.startsWith('✓'),true);
+ spanish.node('bibleBook').value='JOH';spanish.node('bibleBook').onchange();spanish.node('bibleChapter').value='3';spanish.node('bibleChapter').onchange();
+ spanish.node('bibleFirst').value='16';spanish.node('bibleFirst').onchange();spanish.node('bibleLast').value='17';spanish.node('bibleLayout').value='verses';
+ await spanish.node('addBiblePassage').onclick();
+ const parallelItem=spanish.context.worshipWorkspace.getService().items.at(-1);
+ check(parallelItem.secondaryVersion,'RVR1909');check(parallelItem.secondarySlides.length,2);check(parallelItem.secondarySlides[0].endsWith('Juan 3:16 · RVR1909'),true);check(parallelItem.slides[0].endsWith('John 3:16 · KJV'),true);
+ spanish.node('secondLanguage').value='fr';spanish.node('secondLanguage').onchange();
+ check(JSON.parse(spanish.storage.get('worshipui.language.v1')).secondLanguage,'fr');check(spanish.node('bibleSecond').hidden,true);
+ // Another version: pasted from YouVersion, split on verse numbers, labelled with that translation.
+ const yv=await client('operator',false);
+ yv.node('add').onclick();yv.node('typeInput').value='Scripture';await yv.node('typeInput').onchange();await settle();
+ yv.node('bibleVersion').value='YOUVERSION';await yv.node('bibleVersion').onchange();check(yv.node('youVersionTools').hidden,false);
+ yv.node('youVersionId').value='NIV';
+ yv.node('bibleBook').value='JOH';yv.node('bibleBook').onchange();yv.node('bibleChapter').value='3';yv.node('bibleChapter').onchange();
+ yv.node('bibleFirst').value='16';yv.node('bibleFirst').onchange();yv.node('bibleLast').value='17';yv.node('bibleLayout').value='verses';
+ yv.node('youVersionText').value='16 For God so loved the world. 17 For God did not send his Son. John 3:16-17 NIV';
+ await yv.node('addBiblePassage').onclick();
+ const pastedItem=yv.context.worshipWorkspace.getService().items.at(-1);
+ check(pastedItem.primaryVersion,'NIV');check(pastedItem.title,'John 3:16-17 · NIV');check(pastedItem.slides,['For God so loved the world.\nJohn 3:16 · NIV','For God did not send his Son.\nJohn 3:17 · NIV']);check(pastedItem.secondarySlides,undefined);
+ // The second translation box can be filled from the slide references.
+ const fill=await client('operator',false);
+ fill.node('add').onclick();fill.node('typeInput').value='Scripture';await fill.node('typeInput').onchange();await settle();
+ check(fill.node('fillSecondLanguage').hidden,false);
+ fill.node('textInput').value='For God so loved the world.\nJohn 3:16 · KJV\n\nFor God sent not his Son.\nJohn 3:17 · KJV';
+ await fill.node('fillSecondLanguage').onclick();
+ check(fill.node('itemSecondaryVersion').value,'RVR1909');check(fill.node('itemPrimaryVersion').value,'KJV');
+ check(fill.node('itemSecondaryText').value.split('\n\n').map(slide=>slide.split('\n').at(-1)),['Juan 3:16 · RVR1909','Juan 3:17 · RVR1909']);
+ fill.node('textInput').value='No reference here';await fill.node('fillSecondLanguage').onclick();check(fill.node('fillSecondStatus').textContent.includes('verse reference'),true);
+ // Slides can target one audience screen; each screen chooses which language it shows.
+ const screens=await client('operator',false);
+ screens.node('slides').children[1].onclick();screens.node('slideScreen').value='2';screens.node('slideScreen').onchange();
+ check(screens.context.worshipWorkspace.getService().items[0].slideScreens,['','2']);
+ check(screens.node('slides').children[1].children[1].textContent.endsWith(' · Screen 2'),true);
+ screens.node('take').onclick();check(JSON.parse(screens.storage.get(liveKey)).screen,'2');
+ screens.node('slideScreen').value='';screens.node('slideScreenAll').onclick();check(screens.context.worshipWorkspace.getService().items[0].slideScreens,undefined);
+ screens.node('screen2Show').value='second';screens.node('screen2Show').onchange();
+ check(JSON.parse(screens.storage.get('worshipui.screens.v1')).screens.map(screen=>screen.show),['both','second']);
+ // The header toggle makes Spanish the main language; the second-language button then adds English.
+ const es=await client('operator',false);
+ es.node('langEs').onclick();check(JSON.parse(es.storage.get('worshipui.language.v1')).mainLanguage,'es');check(es.node('secondLanguage').disabled,true);
+ es.node('add').onclick();es.node('typeInput').value='Scripture';await es.node('typeInput').onchange();await settle();
+ check(es.node('bibleVersion').value,'RVR1909');check(es.node('bibleSecond').textContent,'+ Add English · KJV');
+ es.node('bibleSecond').onclick();
+ es.node('bibleBook').value='JOH';es.node('bibleBook').onchange();es.node('bibleChapter').value='3';es.node('bibleChapter').onchange();
+ es.node('bibleFirst').value='16';es.node('bibleFirst').onchange();es.node('bibleLast').value='16';es.node('bibleLayout').value='verses';
+ await es.node('addBiblePassage').onclick();
+ const spanishMain=es.context.worshipWorkspace.getService().items.at(-1);
+ check(spanishMain.title,'Juan 3:16 · RVR1909');check(spanishMain.secondaryVersion,'KJV');check(spanishMain.secondarySlides[0].endsWith('John 3:16 · KJV'),true);
+ es.node('langEn').onclick();check(JSON.parse(es.storage.get('worshipui.language.v1')).mainLanguage,'en');check(es.node('bibleVersion').value,'KJV');
+ const remoteEditor=await client('editor',false);remoteEditor.node('slides').children[1].onclick();remoteEditor.node('slides').children[1].onclick();check(remoteEditor.storage.has(liveKey),false);
  return checks;
 }

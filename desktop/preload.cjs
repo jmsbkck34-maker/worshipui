@@ -3,7 +3,8 @@ contextBridge.exposeInMainWorld('worshipDesktop',{
  getConnection:()=>ipcRenderer.sendSync('wui:connection'),
  configure:origin=>ipcRenderer.invoke('wui:configure',origin),
  archiveSong:(name,text)=>ipcRenderer.invoke('wui:archive-song',name,text),
- openSongFolder:()=>ipcRenderer.invoke('wui:open-song-folder')
+ openSongFolder:()=>ipcRenderer.invoke('wui:open-song-folder'),
+ openYouVersion:url=>ipcRenderer.invoke('wui:open-youversion',url)
 });
 contextBridge.exposeInMainWorld('worshipStorage',{
  getItem:key=>{const result=ipcRenderer.sendSync('wui:read',key);if(result.error)throw Error(result.error);return result.value},

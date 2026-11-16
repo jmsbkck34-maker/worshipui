@@ -11,18 +11,87 @@
    if(!match||!bookNames.has(match[1]))throw Error('Bible data contains an invalid verse.');
    return {book:match[1],chapter:Number(match[2]),verse:Number(match[3]),text:match[4]};
   });
-  if(verses.length!==31102||new Set(verses.map(v=>v.book)).size!==66||new Set(verses.map(v=>v.book+':'+v.chapter+':'+v.verse)).size!==verses.length)throw Error('The KJV data is incomplete or contains duplicate verses.');
+  // Translations differ slightly (KJV 31,102 verses; WEB omits a few textual variants), so require a near-complete Bible.
+  if(verses.length<31000||verses.length>31200||new Set(verses.map(v=>v.book)).size!==66||new Set(verses.map(v=>v.book+':'+v.chapter+':'+v.verse)).size!==verses.length)throw Error('The Bible data is incomplete or contains duplicate verses.');
   return verses;
  }
- function books(){return names.map(([id,name])=>({id,name}))}
+ // Bundled translations: id, label, language and data file. Only public-domain texts are bundled.
+ const versions=[
+  {id:'KJV',name:'King James Version (KJV)',language:'en',file:'/assets/bibles/kjv.vpl.txt'},
+  {id:'WEB',name:'World English Bible (WEB)',language:'en',file:'/assets/bibles/web.vpl.txt'},
+  {id:'RVR1909',name:'Reina-Valera 1909 (Español)',language:'es',file:'/assets/bibles/rv1909.vpl.txt'}
+ ];
+ // Languages offered for the second translation; bible names a bundled version when one exists.
+ const languages=[{id:'es',name:'Spanish (Español)',bible:'RVR1909'},{id:'fr',name:'French (Français)'},{id:'pt',name:'Portuguese (Português)'},{id:'de',name:'German (Deutsch)'},{id:'zh',name:'Chinese (中文)'},{id:'ko',name:'Korean (한국어)'},{id:'vi',name:'Vietnamese (Tiếng Việt)'},{id:'tl',name:'Tagalog'},{id:'ar',name:'Arabic (العربية)'},{id:'ru',name:'Russian (Русский)'},{id:'en',name:'English',bible:'KJV'}];
+ const localNames={es:['Génesis','Éxodo','Levítico','Números','Deuteronomio','Josué','Jueces','Rut','1 Samuel','2 Samuel','1 Reyes','2 Reyes','1 Crónicas','2 Crónicas','Esdras','Nehemías','Ester','Job','Salmos','Proverbios','Eclesiastés','Cantares','Isaías','Jeremías','Lamentaciones','Ezequiel','Daniel','Oseas','Joel','Amós','Abdías','Jonás','Miqueas','Nahum','Habacuc','Sofonías','Hageo','Zacarías','Malaquías','Mateo','Marcos','Lucas','Juan','Hechos','Romanos','1 Corintios','2 Corintios','Gálatas','Efesios','Filipenses','Colosenses','1 Tesalonicenses','2 Tesalonicenses','1 Timoteo','2 Timoteo','Tito','Filemón','Hebreos','Santiago','1 Pedro','2 Pedro','1 Juan','2 Juan','3 Juan','Judas','Apocalipsis']};
+ function bookName(book,language='en'){const index=names.findIndex(([id])=>id===book);return localNames[language]?.[index]||bookNames.get(book)}
+ // Book id from a displayed name in any bundled language ("John", "Juan", "Psalm" or "Psalms").
+ function bookId(name){
+  const wanted=String(name).trim().toLowerCase();if(wanted==='psalm')return 'PSA';
+  const english=names.find(([,n])=>n.toLowerCase()===wanted);if(english)return english[0];
+  for(const list of Object.values(localNames)){const index=list.findIndex(n=>n.toLowerCase()===wanted);if(index>=0)return names[index][0]}
+  return null;
+ }
+ // Verse references written on slides by the picker, e.g. "John 3:16 · KJV".
+ function slideReferences(text){
+  return [...String(text).matchAll(/^(.+?) (\d+):(\d+) · [A-Za-z0-9]+$/gm)].map(match=>({book:bookId(match[1]),chapter:Number(match[2]),verse:Number(match[3])})).filter(reference=>reference.book);
+ }
+ function books(language='en'){return names.map(([id])=>({id,name:bookName(id,language)}))}
  function chapters(verses,book){return [...new Set(verses.filter(verse=>verse.book===book).map(verse=>verse.chapter))]}
  function verseNumbers(verses,book,chapter){return verses.filter(verse=>verse.book===book&&verse.chapter===chapter).map(verse=>verse.verse)}
- function passage(verses,book,chapter,first,last){
+ // The same verses from another translation, labelled in its language; fails if that translation lacks any of them.
+ function parallel(verses,references,language='en'){
+  const byKey=new Map(verses.map(verse=>[verse.book+' '+verse.chapter+':'+verse.verse,verse]));
+  return references.map(({book,chapter,verse})=>{
+   const found=byKey.get(book+' '+chapter+':'+verse);
+   if(!found)throw Error(bookName(book,language)+' '+chapter+':'+verse+' is not in the second translation.');
+   return {text:found.text,reference:bookName(book,language)+' '+chapter+':'+verse};
+  });
+ }
+ function passage(verses,book,chapter,first,last,language='en'){
   if(!bookNames.has(book)||!Number.isInteger(chapter)||!Number.isInteger(first)||!Number.isInteger(last)||first<1||last<first||last-first>=200)throw Error('Choose a valid verse range.');
   const found=verses.filter(verse=>verse.book===book&&verse.chapter===chapter&&verse.verse>=first&&verse.verse<=last);
-  if(found.length!==last-first+1||found.some((verse,index)=>verse.verse!==first+index))throw Error('The selected passage is unavailable.');
-  const label=bookNames.get(book)+' '+chapter+':'+first+(last!==first?'-'+last:'');
-  return {reference:label,slides:found.map(verse=>verse.text),verseReferences:found.map(verse=>bookNames.get(verse.book)+' '+verse.chapter+':'+verse.verse)};
+  // Verses a translation omits (for example WEB Acts 15:34) are skipped; the range ends must exist.
+  if(!found.length||found[0].verse!==first||found.at(-1).verse!==last)throw Error('The selected passage is unavailable.');
+  const label=bookName(book,language)+' '+chapter+':'+first+(last!==first?'-'+last:'');
+  return {reference:label,slides:found.map(verse=>verse.text),verseReferences:found.map(verse=>bookName(verse.book,language)+' '+verse.chapter+':'+verse.verse),verses:found.map(({book,chapter,verse})=>({book,chapter,verse}))};
  }
- root.WorshipBible={parse,books,chapters,verseNumbers,passage};
+ // YouVersion (bible.com): other versions are read there and pasted back. Ids are bible.com version ids.
+ const youVersions=[
+  {abbr:'NIV',id:111,name:'New International Version'},{abbr:'ESV',id:59,name:'English Standard Version'},{abbr:'NLT',id:116,name:'New Living Translation'},
+  {abbr:'NKJV',id:114,name:'New King James Version'},{abbr:'CSB',id:1713,name:'Christian Standard Bible'},{abbr:'NASB1995',id:100,name:'New American Standard Bible 1995'},
+  {abbr:'AMP',id:1588,name:'Amplified Bible'},{abbr:'MSG',id:97,name:'The Message'},
+  {abbr:'RVR1960',id:149,name:'Reina-Valera 1960 (Español)',language:'es'},{abbr:'NVI',id:128,name:'Nueva Versión Internacional (Español)',language:'es'},{abbr:'NTV',id:127,name:'Nueva Traducción Viviente (Español)',language:'es'}
+ ];
+ // bible.com uses USFM book codes, which differ from this data set for some books.
+ const usfm={SOL:'SNG',EZE:'EZK',JOE:'JOL',NAH:'NAM',MAR:'MRK',JOH:'JHN',PHI:'PHP',JAM:'JAS','1JO':'1JN','2JO':'2JN','3JO':'3JN'};
+ function youVersionUrl(version,book,chapter,first,last){
+  const code=usfm[book]||book;
+  return 'https://www.bible.com/bible/'+version.id+'/'+code+'.'+chapter+'.'+first+(last>first?'-'+last:'')+'.'+version.abbr;
+ }
+ // Text copied from bible.com: remove direction marks and quotes, drop a trailing "John 3:16 NIV" reference,
+ // then split on the expected verse numbers when they are present ("16 For God… 17 For God…").
+ function pastedPassage(text,numbers){
+  let clean=String(text||'').replace(/[‎‏‪-‮⁦-⁩]/g,'').replace(/\r\n?/g,'\n').trim();
+  clean=clean.replace(/\s*\n?[1-3]?\s?[A-Za-zÀ-ÿ ]+\s\d+:\d+(?:[-–]\d+)?(?:\s+[A-Z0-9]{2,10})?\s*$/,'').trim();
+  clean=clean.replace(/^[“"]+|[”"]+$/g,'').trim();
+  if(!clean)throw Error('Paste the passage copied from YouVersion first.');
+  if(numbers.length>1){
+   const parts=[];let rest=clean,ok=true;
+   for(let n=0;n<numbers.length&&ok;n++){
+    const marker=new RegExp('(?:^|\\s)'+numbers[n]+'\\s+');
+    const found=rest.match(marker);
+    if(!found||(n===0&&found.index>0&&rest.slice(0,found.index).trim())){ok=false;break}
+    rest=rest.slice(found.index+found[0].length);
+    const next=n+1<numbers.length?rest.match(new RegExp('(?:^|\\s)'+numbers[n+1]+'\\s+')):null;
+    if(n+1<numbers.length&&!next){ok=false;break}
+    parts.push((next?rest.slice(0,next.index):rest).replace(/\s+/g,' ').trim());
+    if(next)rest=rest.slice(next.index);
+   }
+   if(ok&&parts.every(Boolean))return {perVerse:true,slides:parts};
+  }
+  if(numbers.length===1)clean=clean.replace(new RegExp('^'+numbers[0]+'\\s+'),'');
+  return {perVerse:numbers.length===1,slides:[clean.replace(/[ \t]+/g,' ').trim()]};
+ }
+ root.WorshipBible={parse,books,bookName,bookId,slideReferences,chapters,verseNumbers,passage,parallel,versions,languages,youVersions,youVersionUrl,pastedPassage};
 })(globalThis);

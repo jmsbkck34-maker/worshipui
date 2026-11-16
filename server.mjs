@@ -14,6 +14,11 @@ function validDate(value) {
 }
 function validTranslations(item) {
   if (item.fitText !== undefined && (item.type !== 'Scripture' || typeof item.fitText !== 'boolean')) return false;
+  // verseSlides keeps the separate verses of a combined passage so it can be split again.
+  const verseList = (list, length) => Array.isArray(list) && list.length >= 2 && list.length <= 200 &&
+    (length === undefined || list.length === length) && list.every(text => typeof text === 'string' && text.length > 0 && text.length <= 20000);
+  if (item.verseSlides !== undefined && !(item.type === 'Scripture' && item.fitText === true && item.slides.length === 1 && verseList(item.verseSlides))) return false;
+  if (item.secondaryVerseSlides !== undefined && !(item.verseSlides && Array.isArray(item.secondarySlides) && verseList(item.secondaryVerseSlides, item.verseSlides.length))) return false;
   if (item.primaryVersion !== undefined && (item.type !== 'Scripture' || typeof item.primaryVersion !== 'string' || item.primaryVersion.length > 80)) return false;
   if (item.secondarySlides === undefined && item.secondaryVersion === undefined) return true;
   return item.type === 'Scripture' && typeof item.primaryVersion === 'string' && item.primaryVersion.length > 0 && item.primaryVersion.length <= 80 &&
@@ -32,7 +37,10 @@ export function validService(s) {
       Array.isArray(i.slides) && i.slides.length > 0 && i.slides.length <= 200 &&
       i.slides.every(t => typeof t === 'string' && t.length <= 20000) && validTranslations(i) &&
       (i.sectionLabels === undefined || i.type === 'Song' && Array.isArray(i.sectionLabels) &&
-       i.sectionLabels.length === i.slides.length && i.sectionLabels.every(label => typeof label === 'string' && label.length <= 50)));
+       i.sectionLabels.length === i.slides.length && i.sectionLabels.every(label => typeof label === 'string' && label.length <= 50)) &&
+      // Optional per-slide audience screen: '' all screens, '1' or '2'.
+      (i.slideScreens === undefined || Array.isArray(i.slideScreens) && i.slideScreens.length === i.slides.length &&
+       i.slideScreens.every(target => ['','1','2'].includes(target)) && i.slideScreens.some(Boolean)));
 }
 function passwordHash(password, salt) { return scryptSync(password, salt, 64).toString('hex'); }
 export async function openStore(directory) {
@@ -88,6 +96,16 @@ export async function openStore(directory) {
         versions.push(version);
         return {version};
       });
+    },
+    // Church branding uses the same compare-and-swap revisions as services.
+    async saveBranding(base, branding, username) {
+      return mutate(next => {
+        const latest = next.branding || null;
+        if (base !== (latest?.revision || 0)) return {conflict:true, current:latest};
+        const version = {revision:(latest?.revision || 0)+1, branding, author:username, savedAt:new Date().toISOString()};
+        next.branding = version;
+        return {version};
+      });
     }
   };
 }
@@ -96,7 +114,7 @@ export function createApp(store, {origin='http://127.0.0.1:8090', secure=false}=
   const publicFiles = new Map([
     ['/', ['index.html','text/html']], ['/index.html',['index.html','text/html']],
     ['/style.css',['style.css','text/css']], ['/app.js',['app.js','text/javascript']], ['/content-import.js',['content-import.js','text/javascript']],
-    ['/bible-search.js',['bible-search.js','text/javascript']], ['/assets/bibles/kjv.vpl.txt',['assets/bibles/kjv.vpl.txt','text/plain']],
+    ['/bible-search.js',['bible-search.js','text/javascript']], ['/assets/bibles/kjv.vpl.txt',['assets/bibles/kjv.vpl.txt','text/plain']], ['/assets/bibles/web.vpl.txt',['assets/bibles/web.vpl.txt','text/plain']], ['/assets/bibles/rv1909.vpl.txt',['assets/bibles/rv1909.vpl.txt','text/plain']],
     ['/sync.js',['sync.js','text/javascript']], ['/sync-core.js',['sync-core.js','text/javascript']],
     ['/sw.js',['sw.js','text/javascript']], ['/desktop-ui.js',['desktop-ui.js','text/javascript']], ['/slide-template.cjs',['slide-template.cjs','text/javascript']],['/assets/fonts/Inter.ttf',['assets/fonts/Inter.ttf','font/ttf']],['/assets/fonts/Montserrat.ttf',['assets/fonts/Montserrat.ttf','font/ttf']],['/assets/fonts/Lato.ttf',['assets/fonts/Lato.ttf','font/ttf']],['/assets/fonts/Merriweather.ttf',['assets/fonts/Merriweather.ttf','font/ttf']],['/assets/fonts/PlayfairDisplay.ttf',['assets/fonts/PlayfairDisplay.ttf','font/ttf']],['/assets/fonts/Oswald.ttf',['assets/fonts/Oswald.ttf','font/ttf']],['/assets/fonts/Poppins.ttf',['assets/fonts/Poppins.ttf','font/ttf']],['/assets/fonts/SourceSans3.ttf',['assets/fonts/SourceSans3.ttf','font/ttf']]
   ]);
@@ -182,6 +200,13 @@ export function createApp(store, {origin='http://127.0.0.1:8090', secure=false}=
           return send(result.conflict?409:200,result);
         }
         return send(405,{error:'Method not allowed'});
+      }
+      if(url.pathname==='/api/branding' && req.method==='GET') return send(200,{version:store.state().branding||null});
+      if(url.pathname==='/api/branding' && req.method==='PUT') {
+        const b=await body();
+        if(!Number.isInteger(b?.baseRevision)||b.baseRevision<0||!SlideTemplate.validBranding(b.branding)) return send(400,{error:'Invalid branding or revision'});
+        const result=await store.saveBranding(b.baseRevision,b.branding,user.username);
+        return send(result.conflict?409:200,result);
       }
       if(url.pathname==='/api/service' && req.method==='GET') return send(200,{version:store.state().versions.at(-1)||null});
       if(url.pathname==='/api/service' && req.method==='PUT') {

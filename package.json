@@ -1,6 +1,6 @@
 {
     "name":  "worshipui",
-    "version":  "0.3.2",
+    "version":  "0.3.3",
     "private":  true,
     "type":  "module",
     "scripts":  {
@@ -14,7 +14,7 @@
                 },
     "main":  "desktop/main.mjs",
     "description":  "Offline church presentation with optional shared-service sync",
-    "author":  "Worship UI",
+    "author":  "WorshipUI",
     "build":  {
                   "directories":  {
                                       "output":  "release"
@@ -34,7 +34,7 @@
                                 "slide-template.cjs",
                                 "assets/**"
                             ],
-                  "productName":  "Worship UI",
+                  "productName":  "WorshipUI",
                   "win":  {
                               "target":  [
                                              {
@@ -44,7 +44,7 @@
                                                           ]
                                              }
                                          ],
-                              "signAndEditExecutable":  false
+                              "signAndEditExecutable":  true
                           },
                   "appId":  "com.worshipui.church",
                   "artifactName":  "WorshipUI-Setup-${version}.${ext}",

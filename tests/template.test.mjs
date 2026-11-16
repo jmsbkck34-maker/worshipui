@@ -37,3 +37,18 @@ test('motion templates retain compatibility, validate choices and survive disk r
  const store=openDeviceStore(directory);store.setItem('worshipui.service.v1',JSON.stringify(service));assert.deepEqual(JSON.parse(openDeviceStore(directory).getItem('worshipui.service.v1')),service);
  }finally{await rm(directory,{recursive:true,force:true})}
 });
+test('text box position is optional, bounded and kept by shared-service validation',()=>{
+ const base=SlideTemplate.normalize();
+ assert.equal(SlideTemplate.textPosition(base),null);
+ const moved={...base,textX:30,textY:75,textWidth:60};
+ assert.equal(SlideTemplate.validTemplate(moved),true);
+ assert.deepEqual(SlideTemplate.textPosition(moved),{x:30,y:75,width:60});
+ assert.deepEqual(SlideTemplate.textPosition({...base,textY:20}),{x:50,y:20,width:90});
+ for(const bad of [{textX:-1},{textX:101},{textY:50.5},{textWidth:19},{textWidth:'90'}])assert.equal(SlideTemplate.validTemplate({...base,...bad}),false);
+ assert.equal(validService({title:'Moved',items:[{id:'s',title:'Song',type:'Song',theme:'dusk',template:moved,slides:['Verse']}]}),true);
+});
+test('per-slide screen targets must line up with the slides',()=>{
+ const item={id:'s',title:'Song',type:'Song',theme:'dusk',slides:['Verse','Chorus']};
+ assert.equal(validService({title:'S',items:[{...item,slideScreens:['','2']}]}),true);
+ for(const bad of [['2'],['','3'],['',''],'2'])assert.equal(validService({title:'S',items:[{...item,slideScreens:bad}]}),false);
+});

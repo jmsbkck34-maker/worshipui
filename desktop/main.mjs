@@ -6,7 +6,10 @@ import {fileURLToPath} from 'node:url';
 import {openDeviceStore,sharedOrigin} from './storage.mjs';
 import {createDesktopHost} from './host.mjs';
 const here=path.dirname(fileURLToPath(import.meta.url)),root=path.dirname(here);
-app.setName('Worship UI');
+// Keep the original "Worship UI" data folder in AppData so existing services survive the rename.
+app.setPath('userData',path.join(app.getPath('appData'),'Worship UI'));
+app.setName('WorshipUI');
+if(process.platform==='win32')app.setAppUserModelId('com.worshipui.church');
 const single=app.requestSingleInstanceLock();
 if(!single)app.quit();
 else {
@@ -35,6 +38,12 @@ else {
    if(!stem)throw Error('Invalid song file name.');
    writeFileSync(path.join(songDirectory(),stem+'-'+randomUUID()+extension),text,{encoding:'utf8',mode:0o600,flag:'wx'});
   });
+  // Opens only bible.com passage links (built by WorshipBible.youVersionUrl) in the system browser.
+  ipcMain.handle('wui:open-youversion',async(event,url)=>{
+   if(!trusted(event))throw Error('Untrusted window');
+   if(typeof url!=='string'||!/^https:\/\/www\.bible\.com\/bible\/[0-9]{1,5}\/[1-3A-Z]{3}\.[0-9]{1,3}\.[0-9]{1,3}(?:-[0-9]{1,3})?\.[A-Z0-9]{2,10}$/.test(url))throw Error('Unsupported YouVersion link');
+   await shell.openExternal(url);
+  });
   ipcMain.handle('wui:open-song-folder',async event=>{
    if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');
    const error=await shell.openPath(songDirectory());if(error)throw Error('Could not open the song folder: '+error);
@@ -60,21 +69,21 @@ else {
    window.webContents.on('will-attach-webview',event=>event.preventDefault());
    window.webContents.session.setPermissionRequestHandler((_contents,_permission,callback)=>callback(false));
   }
-  main=new BrowserWindow({title:'Worship UI — Church workspace',width:1440,height:950,minWidth:800,minHeight:600,backgroundColor:'#101217',webPreferences:preferences});
+  main=new BrowserWindow({title:'WorshipUI — Church workspace',width:1440,height:950,minWidth:800,minHeight:600,backgroundColor:'#101217',webPreferences:preferences});
   main.setMenuBarVisibility(false);protect(main);
   main.webContents.setWindowOpenHandler(({url})=>{
    const target=new URL(url);
-   if(target.href==='https://www.songselect.ccli.com/'){shell.openExternal(target.href).catch(error=>dialog.showErrorBox('Unable to open SongSelect',error.message));return {action:'deny'}}
+   if(target.href==='https://songselect.ccli.com/'){shell.openExternal(target.href).catch(error=>dialog.showErrorBox('Unable to open SongSelect',error.message));return {action:'deny'}}
    if(target.origin!==host.origin||target.pathname!=='/'||!['audience','stage'].includes(target.searchParams.get('view')))return {action:'deny'};
    return {action:'allow',overrideBrowserWindowOptions:{width:1100,height:720,autoHideMenuBar:true,backgroundColor:'#000000',webPreferences:preferences}};
   });
   main.webContents.on('did-create-window',window=>{protect(window);window.webContents.setWindowOpenHandler(()=>({action:'deny'}))});
   main.on('close',event=>{
    const live=JSON.parse(store.getItem('worshipui.sync.v1')||'{}').live;
-   if(live&&!closing){const choice=dialog.showMessageBoxSync(main,{type:'question',buttons:['Keep presenting','Close app and displays'],defaultId:0,cancelId:0,message:'Live mode is active. Close Worship UI and its audience screens?'});if(choice===0){event.preventDefault();return}}
+   if(live&&!closing){const choice=dialog.showMessageBoxSync(main,{type:'question',buttons:['Keep presenting','Close app and displays'],defaultId:0,cancelId:0,message:'Live mode is active. Close WorshipUI and its audience screens?'});if(choice===0){event.preventDefault();return}}
    closing=true;for(const window of windows)if(window!==main)window.destroy();
   });
   await main.loadURL(host.origin+'/');
- }).catch(error=>{dialog.showErrorBox('Worship UI could not start',error.message);app.quit()});
+ }).catch(error=>{dialog.showErrorBox('WorshipUI could not start',error.message);app.quit()});
  app.on('window-all-closed',()=>{host?.server.close();app.quit()});
 }

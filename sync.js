@@ -15,7 +15,7 @@
  panel.innerHTML='<div class="sync-heading"><div><strong>Shared service</strong><p id="syncStatus" role="status">Local only · connect to share</p></div><button id="connect">Connect</button></div><div class="sync-buttons"><button id="liveMode" aria-pressed="false">Enter Live mode</button><button id="publish" disabled>Publish changes</button><button id="reviewUpdate" hidden>Review update</button><button id="history" disabled>Version history</button><button id="recovery">Download recovery</button></div><p id="offlineStatus">Preparing offline app…</p><p id="syncIdentity"></p>';
  document.querySelector('aside').append(panel);
  const dialog=document.createElement('dialog');dialog.id='syncDialog';
- dialog.innerHTML='<form id="loginForm"><div class="eyebrow">CONNECT YOUR TEAM</div><h2>Same service. Wherever you prepare.</h2><p>Sign in to the same Worship UI address at home and at church. Your local copy remains available offline.</p><label>Username<input id="syncUsername" autocomplete="username" required></label><label>Password<input id="syncPassword" type="password" autocomplete="current-password" required></label><p id="loginError" role="alert"></p><div class="dialog-actions"><button id="closeLogin" type="button">Cancel</button><button class="primary" type="submit">Sign in</button></div></form>';
+ dialog.innerHTML='<form id="loginForm"><div class="eyebrow">CONNECT YOUR TEAM</div><h2>Same service. Wherever you prepare.</h2><p>Sign in to the same WorshipUI address at home and at church. Your local copy remains available offline.</p><label>Username<input id="syncUsername" autocomplete="username" required></label><label>Password<input id="syncPassword" type="password" autocomplete="current-password" required></label><p id="loginError" role="alert"></p><div class="dialog-actions"><button id="closeLogin" type="button">Cancel</button><button class="primary" type="submit">Sign in</button></div></form>';
  document.body.append(dialog);
  const review=document.createElement('dialog');review.id='reviewDialog';
  review.innerHTML='<div class="eyebrow">REVIEW BEFORE APPLYING</div><h2 id="reviewTitle">Service update</h2><p id="reviewMeta"></p><ul id="changeList"></ul><div class="revision-comparison"><section><h3>Your local copy</h3><pre id="localText"></pre></section><section><h3>Shared version</h3><pre id="remoteText"></pre></section></div><p>Your current projection stays unchanged. A recovery copy is saved before replacing your local service.</p><div class="dialog-actions"><button id="later">Later</button><button id="keepLocal">Keep local & publish</button><button class="primary" id="acceptRemote">Use shared version</button></div>';
@@ -101,7 +101,32 @@
    // Only publish automatically outside Live mode and outside an active edit.
    if(connected&&!pending&&dirty()&&!meta.live&&!bridge.editing())await publish();
    if(connected&&!meta.live&&!bridge.editing())await syncInactive();
+   if(connected&&!meta.live)await syncBranding();
  }
+ // Branding: download newer shared branding, publish local changes, and hand conflicts to Settings.
+ let brandingBusy=false;
+ async function syncBranding(){
+   if(!identity||meta.live||brandingBusy)return;
+   brandingBusy=true;
+   try{
+     const record=bridge.getBranding(),remote=(await api('/api/branding')).version;
+     const empty=SlideTemplate.emptyBranding,localChanged=!core.same(record.branding,record.baseBranding||empty);
+     if(remote&&!SlideTemplate.validBranding(remote.branding))return;
+     if(remote&&remote.revision!==record.baseRevision){
+       if(core.same(record.branding,remote.branding)||!localChanged)bridge.setBranding({version:1,branding:remote.branding,baseRevision:remote.revision,baseBranding:remote.branding});
+       else bridge.showBrandingConflict(remote);
+       return;
+     }
+     if(!localChanged)return;
+     const snapshot=record.branding;
+     try{
+       const saved=await api('/api/branding',{method:'PUT',body:JSON.stringify({baseRevision:record.baseRevision,branding:snapshot})});
+       bridge.setBranding({...bridge.getBranding(),baseRevision:saved.version.revision,baseBranding:snapshot});
+     }catch(error){if(error.status===409&&error.body.current)bridge.showBrandingConflict(error.body.current);else throw error}
+   }catch(error){status(error.message||'Offline · branding saved on this device')}
+   finally{brandingBusy=false}
+ }
+ window.addEventListener('worship:branding',()=>syncBranding());
  async function syncInactive(){
    if(busy||!identity)return;
    const active=bridge.getDate()||'undated',entries=bridge.getDateEntries();
@@ -214,7 +239,7 @@
    }else if('serviceWorker' in navigator){
      try{
        await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;
-       const cache=await caches.open('worshipui-shell-v12');const files=['/','/index.html','/app.js','/content-import.js','/bible-search.js','/assets/bibles/kjv.vpl.txt','/style.css','/sync-core.js','/sync.js','/desktop-ui.js','/slide-template.cjs','/assets/fonts/Inter.ttf','/assets/fonts/Montserrat.ttf','/assets/fonts/Lato.ttf','/assets/fonts/Merriweather.ttf','/assets/fonts/PlayfairDisplay.ttf','/assets/fonts/Oswald.ttf','/assets/fonts/Poppins.ttf','/assets/fonts/SourceSans3.ttf'];
+       const cache=await caches.open('worshipui-shell-v19');const files=['/','/index.html','/app.js','/content-import.js','/bible-search.js','/assets/bibles/kjv.vpl.txt','/assets/bibles/web.vpl.txt','/assets/bibles/rv1909.vpl.txt','/style.css','/sync-core.js','/sync.js','/desktop-ui.js','/slide-template.cjs','/assets/fonts/Inter.ttf','/assets/fonts/Montserrat.ttf','/assets/fonts/Lato.ttf','/assets/fonts/Merriweather.ttf','/assets/fonts/PlayfairDisplay.ttf','/assets/fonts/Oswald.ttf','/assets/fonts/Poppins.ttf','/assets/fonts/SourceSans3.ttf'];
        const ready=(await Promise.all(files.map(file=>cache.match(file)))).every(Boolean);
        $('offlineStatus').textContent=ready?'✓ App downloaded · text service available offline':'Offline download incomplete · keep this window open';
      }catch{$('offlineStatus').textContent='Offline app download unavailable · keep this window open'}

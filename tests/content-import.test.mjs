@@ -22,6 +22,16 @@ test('imports plain lyrics and ChordPro while preserving slide breaks',()=>{
  ]);
 });
 
+test('imports SongSelect text with title, section labels and credit block',()=>{
+ const importer=importerWithXml(null);
+ const file='O Come All Ye Faithful\n\nVerse 1\nO come all ye faithful\nJoyful and triumphant\n\nChorus\nO come let us adore Him\nChrist the Lord\n\nC. Frederick Oakeley\nCCLI Song #31054\n© Words: Public Domain';
+ assert.deepEqual(normalize(importer.parseLyricsFile('O Come All Ye Faithful-lyrics.txt',file)),[{
+  title:'O Come All Ye Faithful',
+  slides:['O come all ye faithful\nJoyful and triumphant','O come let us adore Him\nChrist the Lord','C. Frederick Oakeley\nCCLI Song #31054\n© Words: Public Domain'],
+  sectionLabels:['Verse 1','Chorus','Copyright']
+ }]);
+});
+
 test('imports multiple CSV songs and quoted multiline lyrics',()=>{
  const importer=importerWithXml(null);
  const items=importer.parseLyricsFile('songs.csv','title,lyrics\n"Amazing, Grace","First line\nSecond line"\nSecond,"Another song"');

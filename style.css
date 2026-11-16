@@ -16,3 +16,33 @@
 .date-picker{border-bottom:1px solid #343b49;padding-bottom:15px;margin-bottom:20px}.date-picker label{margin:0;color:#96a0b3;font-size:10px;font-weight:700;letter-spacing:1.4px}.date-picker input{margin:8px 0}.date-picker div{display:flex;gap:5px}.date-picker button{font-size:11px;padding:7px}.date-picker #openUndated{margin-top:6px}.date-picker p{font-size:11px;color:#a5b5ce;margin:8px 0 0}
 .item-library{border:1px solid #343b49;border-radius:8px;padding:12px;margin:14px 0}.item-library h3{margin:0;font-size:13px}.item-library label{margin:8px 0}.item-library a{display:inline-block;margin:8px;color:#b8c8ff;font-size:12px}.item-library p{font-size:11px;color:#a5b5ce}.library-results{max-height:160px;overflow:auto}.library-results button{display:block;width:100%;text-align:left;margin:5px 0;font-size:12px}#itemDialog{max-height:92vh;overflow:auto}#saveSongTemplate{margin-top:8px}
 #songSection{margin-top:12px;font-size:12px}#songSectionDialog{width:min(440px,94vw)}
+.verse-layout{border-top:1px solid #343b49;margin-top:18px;padding-top:14px}.verse-layout h3{font-size:14px;margin:0 0 10px}
+.screen.text-positioned>.slide-text,.screen.text-positioned>.slide-columns{position:absolute;z-index:1;left:var(--text-x,50%);top:var(--text-y,50%);width:var(--text-width,90%);transform:translate(-50%,-50%)}
+.stage-mode .screen.text-positioned>.slide-text,.stage-mode .screen.text-positioned>.slide-columns{position:relative;left:auto;top:auto;width:100%;transform:none}
+.text-position{border-top:1px solid #343b49;margin-top:18px;padding-top:14px}.text-position h3{font-size:14px;margin:0 0 10px}
+.template-preview{cursor:move;touch-action:none;user-select:none;font-size:12px;max-width:520px;margin:0 auto 12px}
+.text-position-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:12px;align-items:end}.text-position-controls label{margin:0;font-size:12px}
+@media(max-width:600px){.text-position-controls{grid-template-columns:1fr}}
+.workspace{display:flex;align-items:center;gap:10px}#headerLogo{height:34px;max-width:120px;object-fit:contain}
+.blackout-logo{position:absolute;inset:0;margin:auto;max-width:40%;max-height:40%;object-fit:contain;z-index:1}
+.branding-section{margin-top:18px}.branding-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.branding-section textarea{width:100%}
+.logo-preview{height:110px;border:1px dashed #343b49;border-radius:8px;display:flex;align-items:center;justify-content:center;background:#000;color:#7c879b;font-size:12px}.logo-preview img{max-height:96px;max-width:90%;object-fit:contain}
+.branding-section .button,#removeBrandLogo{margin-top:10px;margin-right:6px}.check-row{display:flex;gap:8px;align-items:center;font-size:12px;margin-top:12px}
+.branding-conflict{border:1px solid #8b754c;border-radius:8px;padding:10px 12px;margin-bottom:12px;background:#2a2417}.branding-conflict p{margin:0 0 8px;font-size:12px}.branding-conflict button{margin-right:8px}
+@media(max-width:760px){.branding-grid{grid-template-columns:1fr}}
+@media(max-width:1100px){.workspace{display:none}}
+.editor>.theme-panel{border-top:0;margin-top:0;padding-top:0;border-bottom:1px solid #292f3b;padding-bottom:20px;margin-bottom:22px}
+/* Wide screens: the page itself doesn't scroll; each column scrolls on its own, so the service list and live
+   controls stay in place while the slide column scrolls. Narrower layouts keep normal page scrolling. */
+@media(min-width:1101px){
+ body:not(.output-mode):not(.stage-mode){height:100vh;overflow:hidden;display:flex;flex-direction:column}
+ body:not(.output-mode):not(.stage-mode)>main{flex:1;min-height:0}
+ body:not(.output-mode):not(.stage-mode)>main>*{min-height:0;overflow-y:auto}
+}
+.dialog-actions-top{position:sticky;top:-30px;z-index:3;margin:-30px -30px 18px;padding:14px 30px;background:#1a1f2a;border-bottom:1px solid #2f3646}
+.screens-panel{border-top:1px solid #292f3b;margin-top:18px;padding-top:14px}.screens-panel strong{font-size:12px}.screens-panel .subtle{font-size:11px;color:#8c98ac}
+.screen-row{display:grid;grid-template-columns:70px 1fr auto;gap:8px;align-items:center;margin-top:8px;font-size:12px}.screen-row select{margin:0}
+.slide-screen-row{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-top:12px}.slide-screen-row label{margin:0;font-size:12px}
+.brand-block{display:flex;flex-direction:column;gap:6px}.language-toggle{display:inline-flex;border:1px solid #343b49;border-radius:999px;overflow:hidden;width:max-content}
+.language-toggle button{border:0;border-radius:0;padding:3px 10px;font-size:11px;background:transparent;color:#96a0b3;margin:0}
+.language-toggle button[aria-pressed="true"]{background:#2d3a5c;color:#fff}

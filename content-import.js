@@ -99,9 +99,26 @@
   if(!items.length)throw Error('The CSV file has no song rows.');
   return items;
  }
+ const SECTION_HEADER=/^(?:verse|chorus|pre-?chorus|bridge|tag|intro|outro|ending|interlude|refrain|coda|instrumental|vamp|misc|turnaround)(?:\s*\d+[a-z]?)?$/i;
+ const COPYRIGHT_BLOCK=/ccli\s*(?:song|license)\s*#|ccli\.com|songselect|copyright|©|public domain/i;
+ // SongSelect-style text: optional title line, "Verse 1"/"Chorus" headers, and a closing credit block.
+ function parseLyricsText(source,titleFallback) {
+  const blocks=splitTextSlides(source);
+  const isHeaded=block=>block.includes('\n')&&SECTION_HEADER.test(block.split('\n')[0].trim());
+  if(!blocks.some(isHeaded))return {title:titleFallback,slides:checkedSlides(blocks)};
+  let title=titleFallback;
+  if(blocks[0]&&!blocks[0].includes('\n')&&!SECTION_HEADER.test(blocks[0].trim())&&blocks[0].length<=100)title=blocks.shift().trim();
+  const slides=[],labels=[];
+  for(const block of blocks){
+   if(isHeaded(block)){const lines=block.split('\n');slides.push(lines.slice(1).join('\n').trim());labels.push(lines[0].trim().slice(0,50))}
+   else{slides.push(block);labels.push(COPYRIGHT_BLOCK.test(block)?'Copyright':'')}
+  }
+  const checked=checkedSlides(slides);
+  return checked.length===labels.length?{title,slides:checked,sectionLabels:labels}:{title,slides:checked};
+ }
  function parseLyricsFile(name,value) {
-  const source=sourceText(value),extension=fileType(name),title=fileTitle(name);
-  if(extension==='txt')return [{title,slides:checkedSlides(splitTextSlides(source))}];
+  const source=sourceText(value),extension=fileType(name),title=fileTitle(name).replace(/[\s_-]+lyrics$/i,'').trim()||fileTitle(name);
+  if(extension==='txt')return [parseLyricsText(source,title)];
   if(extension==='pro'||extension==='chopro'||extension==='chordpro')return parseChordPro(source,title);
   if(extension==='xml')return parseOpenLyrics(source,title);
   if(extension==='csv')return parseLyricsCsv(source,title);

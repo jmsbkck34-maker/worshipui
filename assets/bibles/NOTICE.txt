@@ -5,3 +5,17 @@ https://ebible.org/Scriptures/eng-kjv2006_vpl.zip
 
 The source identifies this edition as public domain outside the United
 Kingdom. UK printing and import of printed copies may require permission.
+
+World English Bible (WEB), 2006 edition, converted to the same verse-per-line
+format by tools/bible-text-to-vpl.mjs.
+Source: Bible SuperSearch plain-text export (bibles_text_6.0, EN-English/web.txt).
+https://www.biblesupersearch.com/bible-downloads/
+The source states: "This Bible is in the Public Domain." WEB omits a few
+textual variants (Acts 8:37, 15:34, 24:7; Luke 17:36) and places the Romans
+doxology at 14:24-26; these appear as in the source.
+
+Reina-Valera 1909 (RVR1909), Spanish, converted to the same verse-per-line
+format by tools/bible-text-to-vpl.mjs.
+Source: Bible SuperSearch plain-text export (bibles_text_6.0, ES-Spanish/rv_1909.txt).
+The source states: "This Bible is in the Public Domain." Verse numbering
+matches the KJV (31,102 verses). Book names use standard Reina-Valera forms.
