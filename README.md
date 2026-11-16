@@ -1,0 +1,96 @@
+# Worship UI
+
+Local-first service preparation and presentation, with shared revision-based editing for a home editor and a church operator.
+
+## Start locally on Windows
+
+Run `powershell -ExecutionPolicy Bypass -File .\start-local.ps1` from this folder. Open **http://127.0.0.1:8091**. The launcher uses Node.js when installed, or VS Code's bundled Node runtime for local development. For normal hosting, use Node.js 22+ and `npm start` (port 8090 by default). No npm dependencies or build step are required.
+
+The local preview is bound to your own computer. It is not accessible from home or church over the internet until a shared HTTPS host is configured.
+
+## Prepare accounts
+
+Stop the server before creating accounts; the initial single-process store loads accounts at startup. The account script uses Node.js or the installed VS Code development runtime:
+
+```powershell
+.\add-user.ps1 -Username home-editor -Role editor
+.\add-user.ps1 -Username church-operator -Role operator
+npm start
+```
+
+The script prompts privately for each password (12–256 characters). Do not put passwords in command arguments, source control, or chat. `server-run.mjs add-user` also accepts a JSON account through stdin for container provisioning; run it against the same persistent data directory while the server is stopped. There is no public account-registration endpoint.
+
+## Home-to-church workflow
+
+1. Both computers open the **same HTTPS address** and sign in to their separate accounts.
+2. First connection: review the shared service before replacing an existing local service, or explicitly keep and publish the local version. An empty server receives the first published service.
+3. At home, edit the service normally. In preparation mode changes publish after a short pause; connected computers check every five seconds. Unsaved edits and open item editors prevent incoming updates from replacing local work.
+4. At church, wait for **All changes downloaded** and **App downloaded**. These are separate checks: text content is saved in browser storage and application files in the offline cache.
+5. Choose **Enter Live mode** before worship. Incoming changes wait for review. The review shows both complete copies and a change summary. Only the operator chooses when to apply them. Applying an update never changes the projected slide; **Take live** is a separate local action.
+6. If both people change the service, neither copy silently wins. Review the copies and choose the shared version or explicitly keep and publish the local version. The server checks the revision again during that save; another intervening update produces another conflict.
+7. Export backups before important services. Replacing a local copy also retains the last five recovery snapshots; **Download recovery** exports the latest one. Shared **Version history** can restore an earlier service locally and publish it as a new revision.
+
+## During an outage
+
+Once the app download and service download are complete, the prepared service, backgrounds, audience screen, stage screen, and live controls use this computer. They do not require a server round trip. Offline reload uses the cached app shell; use the same browser profile and exact address. Remote updates and sign-in require connectivity; saved content and locally retained operator mode do not. Reconnection resumes checking when the sign-in session is still valid; an expired session needs sign-in when online.
+
+Keep the browser's stored site data, export backups, and test an actual disconnected rehearsal on church hardware. Browser data eviction, clearing site data, a different profile/address, or a first-ever offline visit can remove/prevent the offline copy. Offline caching requires HTTPS, or localhost/127.0.0.1 in development. New software versions wait until existing app windows close rather than replacing a running service.
+
+## Presentation
+
+Audience and Stage open separate local windows. Allow pop-ups, move Audience to the projector, and select Enter fullscreen. Arrows change preview; Space takes live; B toggles blackout. Remote editors can prepare content; their UI disables live controls. The server has **no live-output API**: projection data is kept in the church browser and never synchronized through the shared service API. Role checks in the UI are convenience controls; the isolation comes from not exposing remote projection control at all.
+
+## Hosting preparation
+
+A Dockerfile is included. Use one app process/replica with a persistent disk mounted at `/data`; keep it across restarts and back it up. Set `WUI_ORIGIN` to the exact public HTTPS origin and terminate TLS at the hosting proxy. The container binds port 8090; set the platform target port accordingly. Production sessions use Secure, HttpOnly, SameSite=Strict cookies. State-changing API requests require the configured origin and JSON. Login attempts are rate-limited; sessions expire after 12 hours and reset after a server restart.
+
+`HOST`, `PORT`, `WUI_ORIGIN`, and `WUI_DATA_DIR` are optional runtime settings. The file-backed store serializes saves and uses atomic replacement. It is designed for one small shared workspace, not multiple replicas or a multi-tenant SaaS. Accounts share that workspace. A larger hosted product should move revision storage to a transactional database and add account administration. This project has not been deployed; hosting selection remains open.
+
+## Checks
+
+With Node.js 22+: `npm test`. Tests cover authentication, protected data files, same-origin enforcement, concurrent saves, revision conflicts, history, persistence, local recovery, review snapshots, live-output isolation, editor controls, offline navigation, and offline presentation. Frontend tests use a simulated DOM and service-worker environment; they do not establish browser layout, real service-worker lifecycle, or physical projector compatibility.
+
+## Current content scope
+
+Songs, manually entered Scripture, announcements, sermons, gradient backgrounds, and JSON backup import/export. Sample content includes traditional Amazing Grace lyrics and KJV Psalm 100. Use content you have permission to display. Static background images are embedded with service content and synchronize with its revision. There is no video library, licensed song integration, automatic Scripture lookup, or separate media-streaming service.
+
+## Windows desktop app (church computer)
+
+The generated installer is `release/WorshipUI-Setup-0.3.2.exe`. Install on Windows x64 and launch Worship UI from the desktop shortcut. The full interface is bundled; no Node.js installation, browser cache, internet access, or sign-in is required to prepare and present a local service. The preview can also be launched from `release/win-unpacked/Worship UI.exe` without installing it; keep that whole folder intact.
+
+The desktop app stores its service, sync baseline, and recovery snapshots under the Windows user profile in `Worship UI/workspace/device.json` inside the app's Roaming AppData folder. Each successful save atomically replaces the file and retains the previous workspace as `device.previous.json`. Do not edit these files while the app is running. A corrupt current file produces an error rather than silently replacing your service. Export JSON backups to another drive before important services. Uninstalling retains the workspace; the file store is separate from the installation directory.
+
+To move a service from the browser prototype: use **Export** there, launch the desktop app, and choose **Import**. The desktop has its own workspace and does not automatically read another browser's storage.
+
+Use **Shared server** to enter the HTTPS address of your shared backend. Leave it blank for independent operation. The saved service stays on this computer when you change the server. Server changes reset the sync baseline, so the first incoming version is reviewed before replacing local content. Leave Live mode before changing connections. Sign in with the church operator account to sync; a desktop restart requires signing in again when online, but local preparation and presentation remain available. Session cookies stay in the app's main process memory and are not exposed to page scripts or persisted with services.
+
+Audience and Stage are local desktop windows and work without connectivity. A new app session starts with blank live output, rather than automatically redisplaying last week's slide. Only one instance of the desktop workspace runs at a time. Closing the main window closes its display windows; Live mode asks before closing. Remote content cannot navigate the app away from its bundled interface, create arbitrary windows, or access Node.js APIs.
+
+Before first church use, rehearse the real workflow: import the service, close/reopen the app, disconnect internet, open Audience and Stage, advance slides, clear lyrics, and blackout. Automated tests cover persistence and local screen serving; physical projector/display placement and the complete disconnected desktop workflow still need a hardware rehearsal. The current installer is unsigned and this is a development preview. Static background images are stored inside the service for offline use. Video imports and playback have not been implemented.
+
+### Desktop development
+
+- `npm ci` installs locked development dependencies.
+- `npm run desktop` launches the app from source.
+- `npm test` runs shared-service, frontend, offline-cache, and desktop storage/proxy tests.
+- `npm run build:win` generates the Windows x64 NSIS installer without publishing anything.
+
+A project-local Node runtime was used for this build, under ignored `.tools/`. It is not included in the installer or source control. Build output is ignored under `release/`. The shared web backend remains independently deployable; the desktop app connects to it through its local proxy and does not bundle server user accounts or any server workspace database.
+
+## Slide template editor
+
+Choose **Edit slide template** below the slide thumbnails. It edits all slides in the current service item, with immediate thumbnail and preview updates. The audience output remains unchanged until **Take live**.
+
+- **Color wheel** opens the system color picker. **Pick screen color** uses the screen eyedropper when supported; Escape cancels it. Unsupported browsers disable the eyedropper while keeping the color picker available.
+- **Import image** accepts PNG, JPEG, and WebP files up to 10 MB. Images are resized to fit within 1920×1080, converted to JPEG, and embedded in the service. The background fills the screen with center cropping. Use **Remove image** or one of the gradient swatches to return to a preset background.
+- **Font** selects a system font, and **Font size** accepts 24–200 on the slide's 1920-pixel reference width. Preview and output scale together. Fonts marked included are bundled with the app and work offline. Other font choices use the fonts installed on each computer, with a system fallback if unavailable.
+
+Templates and embedded images are included in local saves, desktop recovery files, JSON exports, shared revisions, and audience snapshots. Services with no template continue to use their existing gradient and the default font. A service remains subject to the existing shared-service/import size limit; the editor rejects changes that would exceed that limit instead of dropping the image. These are static background images; video support is still separate work.
+
+## Fonts and motion backgrounds (0.3.2)
+
+**Edit slide template** now offers 29 font families. Inter, Montserrat, Lato, Merriweather, Playfair Display, Oswald, Poppins, and Source Sans 3 are bundled with their original SIL Open Font License notices in `assets/fonts/`. They require no internet access or separate font installation. The remaining choices use local system fonts. Included fonts are also cached for browser-based offline use; the desktop installer includes the font files directly.
+
+Choose one of six built-in **Motion backgrounds**: Aurora Drift, Ocean Flow, Warm Glow, Quiet Clouds, Starfield, or Light Rays. These are locally generated animated backgrounds, not streamed videos. They appear in slide thumbnails, preview, and audience output, with text remaining still. **Animate background** can pause the motion, and the operating system's reduced-motion setting keeps the backgrounds static. Motion choices, pause state, and fonts save in the service, export/import, recovery files, and shared revisions. Existing templates remain compatible.
+
+Selecting a motion background changes the prepared item only; the current audience snapshot stays unchanged until **Take live**. Clear lyrics leaves the motion running; Blackout removes the motion and shows black. Update the shared backend from the same version before syncing motion templates. The Windows installer for this version is under `release/0.3.2/`.

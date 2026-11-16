@@ -1,0 +1,176 @@
+/* Shared-service controller. Projection state stays on the church browser. */
+(function() {
+ if(new URLSearchParams(location.search).has('view'))return;
+ const $=id=>document.getElementById(id), core=WorshipSyncCore;
+ const META='worshipui.sync.v1', RECOVERY='worshipui.recovery.v1';
+ let meta;try{meta=JSON.parse(workspaceStorage.getItem(META))}catch{}
+ if(!meta||!Number.isInteger(meta.baseRevision))meta={baseRevision:0,baseService:null,live:false};
+ let identity=null,connected=false,busy=false,pending=null,timer,historyVersion=null,reviewed=null;
+ const bridge=window.worshipWorkspace;
+ const panel=document.createElement('section');panel.className='sync-panel';
+ panel.innerHTML='<div class="sync-heading"><div><strong>Shared service</strong><p id="syncStatus" role="status">Local only · connect to share</p></div><button id="connect">Connect</button></div><div class="sync-buttons"><button id="liveMode" aria-pressed="false">Enter Live mode</button><button id="publish" disabled>Publish changes</button><button id="reviewUpdate" hidden>Review update</button><button id="history" disabled>Version history</button><button id="recovery">Download recovery</button></div><p id="offlineStatus">Preparing offline app…</p><p id="syncIdentity"></p>';
+ document.querySelector('aside').append(panel);
+ const dialog=document.createElement('dialog');dialog.id='syncDialog';
+ dialog.innerHTML='<form id="loginForm"><div class="eyebrow">CONNECT YOUR TEAM</div><h2>Same service. Wherever you prepare.</h2><p>Sign in to the same Worship UI address at home and at church. Your local copy remains available offline.</p><label>Username<input id="syncUsername" autocomplete="username" required></label><label>Password<input id="syncPassword" type="password" autocomplete="current-password" required></label><p id="loginError" role="alert"></p><div class="dialog-actions"><button id="closeLogin" type="button">Cancel</button><button class="primary" type="submit">Sign in</button></div></form>';
+ document.body.append(dialog);
+ const review=document.createElement('dialog');review.id='reviewDialog';
+ review.innerHTML='<div class="eyebrow">REVIEW BEFORE APPLYING</div><h2 id="reviewTitle">Service update</h2><p id="reviewMeta"></p><ul id="changeList"></ul><div class="revision-comparison"><section><h3>Your local copy</h3><pre id="localText"></pre></section><section><h3>Shared version</h3><pre id="remoteText"></pre></section></div><p>Your current projection stays unchanged. A recovery copy is saved before replacing your local service.</p><div class="dialog-actions"><button id="later">Later</button><button id="keepLocal">Keep local & publish</button><button class="primary" id="acceptRemote">Use shared version</button></div>';
+ document.body.append(review);
+ const history=document.createElement('dialog');history.id='historyDialog';
+ history.innerHTML='<div class="eyebrow">VERSION HISTORY</div><h2>Earlier services</h2><p>Restore into your local workspace, then publish as a new revision. Existing history is preserved.</p><div id="versionList"></div><button id="closeHistory">Close</button>';
+ document.body.append(history);
+ function saveMeta(){try{workspaceStorage.setItem(META,JSON.stringify(meta));return true}catch{status('Sync paused: device storage is full. Export a backup.');return false}}
+ function dirty(){return !meta.baseService||!core.same(bridge.getService(),meta.baseService)}
+ function status(text){$('syncStatus').textContent=text}
+ function label(){
+   $('liveMode').textContent=meta.live?'Live mode · updates held':'Enter Live mode';
+   $('liveMode').setAttribute('aria-pressed',String(!!meta.live));
+   $('liveMode').disabled=meta.role==='editor';
+   $('publish').disabled=!identity||busy||!!pending||!dirty();
+   $('reviewUpdate').hidden=!pending;
+   $('history').disabled=!identity||busy;
+   $('connect').textContent=identity?'Sign out':'Connect';
+   $('syncIdentity').textContent=identity?identity.username+' · '+identity.role:(meta.username?'Offline copy · '+meta.username:'');
+   bridge.setRole(meta.role||'operator');
+ }
+ async function api(url,options={}){
+   const response=await fetch(url,{...options,headers:{'Content-Type':'application/json',...options.headers},cache:'no-store',signal:AbortSignal.timeout(10000)});
+   let body;try{body=await response.json()}catch{throw Error('Shared server unavailable. Local service is ready.')}
+   if(response.status===401){identity=null;connected=false;label();}
+   if(!response.ok){const error=Error(body.error||'Sync request failed');error.status=response.status;error.body=body;throw error}
+   connected=true;return body;
+ }
+ function backup(){
+   try{let versions=JSON.parse(workspaceStorage.getItem(RECOVERY)||'[]');versions.push({at:new Date().toISOString(),service:bridge.getService()});workspaceStorage.setItem(RECOVERY,JSON.stringify(versions.slice(-5)));return true}
+   catch{status('Cannot save recovery copy. Export your local service before applying.');return false}
+ }
+ function apply(version){
+   if(!bridge.valid(version.service)||!backup())return false;
+   const oldService=bridge.getService(),oldMeta=structuredClone(meta);
+   if(!bridge.replace(version.service)){status('Cannot save update on this device. Export a backup.');return false}
+   meta.baseRevision=version.revision;meta.baseService=structuredClone(version.service);
+   if(!saveMeta()){meta=oldMeta;bridge.replace(oldService);return false}
+   pending=null;status('All changes downloaded · revision '+version.revision);label();return true;
+ }
+ function receive(version){
+   if(!version)return;
+   if(!bridge.valid(version.service)||!Number.isInteger(version.revision)){status('Server sent an invalid service. Local copy preserved.');return}
+   const decision=core.receive({baseRevision:meta.baseRevision,local:bridge.getService(),dirty:dirty(),live:meta.live,editing:bridge.editing()},version);
+   if(decision==='ignore')return;
+   if(decision==='acknowledge'){
+     meta.baseRevision=version.revision;meta.baseService=structuredClone(version.service);saveMeta();pending=null;status('All changes downloaded · revision '+version.revision);
+   }else if(decision==='apply'){apply(version)}else{
+     pending=version;status(decision==='conflict'?'Both copies changed · review to resolve':'Update waiting · review when ready');
+   }
+   label();
+ }
+ async function publish(){
+   if(!identity||busy||pending||!dirty())return;
+   const snapshot=bridge.getService();busy=true;label();status('Publishing changes…');
+   try{
+     const result=await api('/api/service',{method:'PUT',body:JSON.stringify({baseRevision:meta.baseRevision,service:snapshot})});
+     meta.baseRevision=result.version.revision;meta.baseService=structuredClone(snapshot);saveMeta();
+     status(dirty()?'New local edits waiting to publish':'Shared copy saved · revision '+meta.baseRevision);
+   }catch(error){
+     if(error.status===409 && error.body.current){pending=error.body.current;status('Another editor saved first · both copies preserved');}
+     else status(error.message||'Offline · local changes waiting to publish');
+   }finally{busy=false;label()}
+ }
+ async function sync(){
+   if(busy||!identity)return;
+   busy=true;label();
+   try{
+     const result=await api('/api/service');
+     receive(result.version);
+     if(!pending&&!dirty())status('All changes downloaded · revision '+meta.baseRevision);
+   }catch(error){connected=false;status(error.message||'Offline · downloaded service ready')}
+   finally{busy=false;label()}
+   // Only publish automatically outside Live mode and outside an active edit.
+   if(connected&&!pending&&dirty()&&!meta.live&&!bridge.editing())await publish();
+ }
+ function readable(service){return service.title+'\n\n'+service.items.map((item,n)=>(n+1)+'. '+item.title+' ['+item.type+']\n'+item.slides.map((s,i)=>'Slide '+(i+1)+'\n'+s).join('\n\n')).join('\n\n────\n\n')}
+ function showReview(version,fromHistory=false){
+   if(!version)return;
+   reviewed=structuredClone(version);historyVersion=fromHistory?version:null;
+   $('reviewTitle').textContent=fromHistory?'Restore revision '+version.revision:(dirty()?'Resolve service changes':'Review service update');
+   $('reviewMeta').textContent='Revision '+version.revision+' · '+version.author+' · '+new Date(version.savedAt).toLocaleString();
+   $('changeList').replaceChildren();core.changed(bridge.getService(),version.service).forEach(change=>{const li=document.createElement('li');li.textContent=change;$('changeList').append(li)});
+   $('localText').textContent=readable(bridge.getService());$('remoteText').textContent=readable(version.service);
+   $('keepLocal').hidden=fromHistory||!identity;
+   $('acceptRemote').textContent=fromHistory?'Restore local copy':'Use shared version';
+   review.showModal();
+ }
+ $('reviewUpdate').onclick=()=>showReview(pending);
+ $('later').onclick=()=>{review.close();historyVersion=null};
+ $('acceptRemote').onclick=()=>{
+   const version=reviewed;if(!version)return;
+   if(historyVersion){if(!backup()||!bridge.replace(version.service))return;status('Earlier version restored locally · publish when ready');historyVersion=null;review.close();label();}
+   else if(apply(version))review.close();
+ };
+ $('keepLocal').onclick=async()=>{
+   if(!reviewed||!identity||busy||!backup())return;
+   // Explicit replacement still uses compare-and-swap; a newer save will conflict again.
+   meta.baseRevision=reviewed.revision;meta.baseService=structuredClone(reviewed.service);saveMeta();pending=null;review.close();await publish();
+ };
+ $('liveMode').onclick=()=>{
+   if(meta.role==='editor')return;
+   meta.live=!meta.live;saveMeta();label();
+   status(meta.live?'Live mode · incoming updates require review':'Preparation mode · checking for updates');
+   if(!meta.live)sync();
+ };
+ $('publish').onclick=publish;
+ $('connect').onclick=async()=>{
+   if(identity){
+     try{await api('/api/logout',{method:'POST',body:'{}'});identity=null;connected=false;status('Signed out · downloaded service kept on this computer');label()}
+     catch{status('Unable to sign out while offline. Retry when connected.')}
+   }else dialog.showModal();
+ };
+ $('closeLogin').onclick=()=>{dialog.close();$('syncPassword').value=''};
+ $('loginForm').onsubmit=async event=>{
+   event.preventDefault();$('loginError').textContent='Signing in…';
+   try{
+     const user=await api('/api/login',{method:'POST',body:JSON.stringify({username:$('syncUsername').value,password:$('syncPassword').value})});
+     identity=user;meta.username=user.username;meta.role=user.role;if(user.role==='editor')meta.live=false;saveMeta();label();dialog.close();$('syncPassword').value='';await sync();
+   }catch(error){$('loginError').textContent=error.message}
+ };
+ $('history').onclick=async()=>{
+   try{const result=await api('/api/versions');$('versionList').replaceChildren();if(!result.versions.length)$('versionList').textContent='No shared versions yet.';
+     result.versions.forEach(version=>{const button=document.createElement('button');button.className='version-entry';button.textContent='Revision '+version.revision+' · '+version.title+' · '+version.author+' · '+new Date(version.savedAt).toLocaleString();button.onclick=async()=>{try{const full=await api('/api/versions/'+version.revision);history.close();showReview(full.version,true)}catch(error){status(error.message)}};$('versionList').append(button)});history.showModal();
+   }catch(error){status(error.message)}
+ };
+ $('closeHistory').onclick=()=>history.close();
+ window.addEventListener('worship:changed',()=>{
+   if(!identity)return;status(pending?'Both copies changed · review to resolve':'Local changes saved · waiting to publish');label();clearTimeout(timer);
+   if(!meta.live)timer=setTimeout(sync,1500);
+ });
+ window.addEventListener('online',()=>reconnect());
+ window.addEventListener('offline',()=>{connected=false;status('Offline · downloaded service ready');label()});
+ window.addEventListener('beforeunload',event=>{if(identity&&dirty()){event.preventDefault();event.returnValue=''}});
+ async function reconnect(){
+   if(busy)return;
+   if(!identity&&meta.username){
+     busy=true;
+     try{identity=await api('/api/me');meta.role=identity.role;meta.username=identity.username;saveMeta()}
+     catch{status('Offline or signed out · downloaded service ready')}
+     finally{busy=false;label()}
+   }
+   return sync();
+ }
+ async function start(){
+   label();
+   if(window.worshipDesktop){
+     $('offlineStatus').textContent='Installed app · service saved on this computer';
+   }else if('serviceWorker' in navigator){
+     try{
+       await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;
+       const cache=await caches.open('worshipui-shell-v5');const files=['/','/index.html','/app.js','/style.css','/sync-core.js','/sync.js','/desktop-ui.js','/slide-template.cjs','/assets/fonts/Inter.ttf','/assets/fonts/Montserrat.ttf','/assets/fonts/Lato.ttf','/assets/fonts/Merriweather.ttf','/assets/fonts/PlayfairDisplay.ttf','/assets/fonts/Oswald.ttf','/assets/fonts/Poppins.ttf','/assets/fonts/SourceSans3.ttf'];
+       const ready=(await Promise.all(files.map(file=>cache.match(file)))).every(Boolean);
+       $('offlineStatus').textContent=ready?'✓ App downloaded · text service available offline':'Offline download incomplete · keep this window open';
+     }catch{$('offlineStatus').textContent='Offline app download unavailable · keep this window open'}
+   }else $('offlineStatus').textContent='Offline reload unavailable in this browser · keep this window open';
+   try{identity=await api('/api/me');meta.username=identity.username;meta.role=identity.role;if(identity.role==='editor')meta.live=false;saveMeta();label();await sync()}
+   catch{status(meta.baseRevision?'Offline or signed out · downloaded revision '+meta.baseRevision+' ready':'Local only · connect to share');label()}
+   setInterval(reconnect,5000);
+ }
+ start();
+})();

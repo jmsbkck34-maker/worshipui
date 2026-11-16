@@ -1,0 +1,61 @@
+{
+    "name":  "worshipui",
+    "version":  "0.3.2",
+    "private":  true,
+    "type":  "module",
+    "scripts":  {
+                    "start":  "node server-run.mjs",
+                    "test":  "node --test tests/*.test.mjs",
+                    "desktop":  "electron .",
+                    "build:win":  "electron-builder --win nsis --x64 --publish never"
+                },
+    "engines":  {
+                    "node":  "\u003e=22"
+                },
+    "main":  "desktop/main.mjs",
+    "description":  "Offline church presentation with optional shared-service sync",
+    "author":  "Worship UI",
+    "build":  {
+                  "directories":  {
+                                      "output":  "release"
+                                  },
+                  "files":  [
+                                "desktop/**",
+                                "index.html",
+                                "app.js",
+                                "sync.js",
+                                "sync-core.js",
+                                "desktop-ui.js",
+                                "style.css",
+                                "server.mjs",
+                                "package.json",
+                                "slide-template.cjs",
+                                "assets/**"
+                            ],
+                  "productName":  "Worship UI",
+                  "win":  {
+                              "target":  [
+                                             {
+                                                 "target":  "nsis",
+                                                 "arch":  [
+                                                              "x64"
+                                                          ]
+                                             }
+                                         ],
+                              "signAndEditExecutable":  false
+                          },
+                  "appId":  "com.worshipui.church",
+                  "artifactName":  "WorshipUI-Setup-${version}.${ext}",
+                  "nsis":  {
+                               "oneClick":  false,
+                               "perMachine":  false,
+                               "createDesktopShortcut":  true,
+                               "allowToChangeInstallationDirectory":  true,
+                               "deleteAppDataOnUninstall":  false
+                           }
+              },
+    "devDependencies":  {
+                            "electron":  "45.3.3",
+                            "electron-builder":  "26.0.12"
+                        }
+}
