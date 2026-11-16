@@ -1,5 +1,6 @@
-import {app,BrowserWindow,ipcMain,dialog} from 'electron';
-import {readFileSync,writeFileSync,existsSync,renameSync} from 'node:fs';
+import {app,BrowserWindow,ipcMain,dialog,shell} from 'electron';
+import {readFileSync,writeFileSync,existsSync,renameSync,mkdirSync} from 'node:fs';
+import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {openDeviceStore,sharedOrigin} from './storage.mjs';
@@ -25,10 +26,29 @@ else {
    catch{event.returnValue={error:'Unable to save local workspace. Export a backup.'}}
   });
   ipcMain.on('wui:connection',(event)=>{event.returnValue=trusted(event)?{origin:settings.origin}:{} });
+  const songDirectory=()=>{const directory=path.join(app.getPath('userData'),'songs');mkdirSync(directory,{recursive:true});return directory};
+  ipcMain.handle('wui:archive-song',(event,name,text)=>{
+   if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');
+   if(typeof name!=='string'||typeof text!=='string'||Buffer.byteLength(text)>5_000_000||!/\.(txt|pro|chopro|chordpro|xml|csv)$/i.test(name))throw Error('Invalid song file.');
+   const originalExtension=path.extname(name),extension=originalExtension.toLowerCase();
+   const stem=path.basename(name,originalExtension).replace(/[^a-zA-Z0-9._ -]/g,'_').replace(/^\.+/,'').slice(0,90);
+   if(!stem)throw Error('Invalid song file name.');
+   writeFileSync(path.join(songDirectory(),stem+'-'+randomUUID()+extension),text,{encoding:'utf8',mode:0o600,flag:'wx'});
+  });
+  ipcMain.handle('wui:open-song-folder',async event=>{
+   if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');
+   const error=await shell.openPath(songDirectory());if(error)throw Error('Could not open the song folder: '+error);
+  });
   ipcMain.handle('wui:configure',(event,value)=>{
    if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');
    const meta=JSON.parse(store.getItem('worshipui.sync.v1')||'{}');if(meta.live)throw Error('Leave Live mode before changing the shared server.');
    const origin=sharedOrigin(value);
+   const savedLibrary=store.getItem('worshipui.setlists.v1');
+   if(savedLibrary){
+    const library=JSON.parse(savedLibrary);
+    for(const entry of Object.values(library.entries)){entry.baseRevision=0;entry.baseService=null}
+    store.setItem('worshipui.setlists.v1',JSON.stringify(library));
+   }
    writeFileSync(settingsFile+'.tmp',JSON.stringify({origin}),{mode:0o600});renameSync(settingsFile+'.tmp',settingsFile);
    host.setRemote(origin);settings={origin};
    store.setItem('worshipui.sync.v1',JSON.stringify({baseRevision:0,baseService:null,live:false,role:'operator'}));
@@ -43,7 +63,9 @@ else {
   main=new BrowserWindow({title:'Worship UI — Church workspace',width:1440,height:950,minWidth:800,minHeight:600,backgroundColor:'#101217',webPreferences:preferences});
   main.setMenuBarVisibility(false);protect(main);
   main.webContents.setWindowOpenHandler(({url})=>{
-   const target=new URL(url);if(target.origin!==host.origin||target.pathname!=='/'||!['audience','stage'].includes(target.searchParams.get('view')))return {action:'deny'};
+   const target=new URL(url);
+   if(target.href==='https://www.songselect.ccli.com/'){shell.openExternal(target.href).catch(error=>dialog.showErrorBox('Unable to open SongSelect',error.message));return {action:'deny'}}
+   if(target.origin!==host.origin||target.pathname!=='/'||!['audience','stage'].includes(target.searchParams.get('view')))return {action:'deny'};
    return {action:'allow',overrideBrowserWindowOptions:{width:1100,height:720,autoHideMenuBar:true,backgroundColor:'#000000',webPreferences:preferences}};
   });
   main.webContents.on('did-create-window',window=>{protect(window);window.webContents.setWindowOpenHandler(()=>({action:'deny'}))});

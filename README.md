@@ -22,6 +22,8 @@ The script prompts privately for each password (12–256 characters). Do not put
 
 ## Home-to-church workflow
 
+Use the **Setlist calendar** at the upper left to open a date, or **Copy to date** to start with the current service. **Undated service** returns to the original workspace. Each date keeps its own local setlist and shared revision history. Leave Live mode and finish editing before switching. Offline edits remain on this device and are sent when connected; if another device changed the same date, open it and review the conflict. The shared server must run this version before dated setlists can sync.
+
 1. Both computers open the **same HTTPS address** and sign in to their separate accounts.
 2. First connection: review the shared service before replacing an existing local service, or explicitly keep and publish the local version. An empty server receives the first published service.
 3. At home, edit the service normally. In preparation mode changes publish after a short pause; connected computers check every five seconds. Unsaved edits and open item editors prevent incoming updates from replacing local work.
@@ -50,9 +52,30 @@ A Dockerfile is included. Use one app process/replica with a persistent disk mou
 
 With Node.js 22+: `npm test`. Tests cover authentication, protected data files, same-origin enforcement, concurrent saves, revision conflicts, history, persistence, local recovery, review snapshots, live-output isolation, editor controls, offline navigation, and offline presentation. Frontend tests use a simulated DOM and service-worker environment; they do not establish browser layout, real service-worker lifecycle, or physical projector compatibility.
 
+## Lyrics and Scripture sources
+
+Choose **Add service item** and select **Song** to search the local song library, save an entered song as a reusable template, or import an authorized TXT, ChordPro, OpenLyrics XML, or CSV file. Imported files are copied into the desktop app's `songs` folder under its user-data directory; **Open song folder** opens it. Save a SongSelect download there or elsewhere and then select it with **Import a song file**. The app cannot change an external browser's download destination. The song library and files remain on this device; a song added to a service is included in that service's exports and shared revisions.
+
+Use **Open SongSelect** or **Settings** for a direct link to [CCLI SongSelect](https://www.songselect.ccli.com/). SongSelect access to lyrics is included for churches with an active [CCLI Church Copyright License](https://ccli.com/us/en+songselect/church-copyright-license); it is not an unrestricted free catalog. Worship UI does not sign in to SongSelect or fetch lyrics. Check imported title, writer, and copyright notices before display.
+
+Settings can store Church Copyright, Streaming, Streaming Plus, and Rehearsal license numbers on the current device. When configured, the Church Copyright number is shown as `CCLI License #...` on Song slides; the other numbers are stored but not printed. These numbers are not included in service exports or shared revisions. Follow CCLI's current terms and keep required song title, writer, and copyright notices with reproduced lyrics.
+
+Choose **Add service item**, select **Scripture**, and search the included KJV by passage (for example `John 3:16-18`) or words. Selecting a result fills the editor; each verse becomes a slide. The bundled public-domain KJV is sourced from [eBible.org](https://ebible.org/find/details.php?id=engkjv); see the bundled notice for UK printing restrictions. Other complete translations are not bundled or indexed.
+
+Settings also supports pasted Scripture or `.txt`, `.csv`, USFM (`.usfm`, `.sfm`), and USX (`.usx`) passage files. CSV files need a `text` or `verse` column and may include a `reference` column. USFM/USX verses become separate slides. Choose the primary version and passage reference in Settings; optionally add a second translation by entering its name and pasting or importing its text. Both versions appear side by side and must have the same number of slides. The English-only primary selector uses nine English entries from the [2025 ECPA bestseller list](https://new.christianbookexpo.com/bestseller/translations.php?id=BO25); it replaces the list's Spanish Reina-Valera with The Message, so it is not itself a strict sales ranking. Selecting a name does not download the translation.
+
+Imported Scripture is added as a service item and saved with the local service. It can therefore appear in JSON exports, recovery files, and shared revisions. Import only Scripture your church is licensed or otherwise authorized to display; follow any attribution, reporting, storage, copying, territory, and offline-use conditions.
+
+Bible provider details and current plans:
+- [API.Bible documentation](https://docs.api.bible/): the Starter plan includes up to three licensed Bibles for non-commercial use and 5,000 calls per month. Its licensing terms constrain storage and copying; this local-file importer does not make API.Bible requests or claim compliance for downstream uses.
+- [ESV API terms](https://api.esv.org/api/): free for qualifying non-commercial use, with attribution and a 500-verse local-cache limit.
+- [eBible.org](https://ebible.org/): downloadable Bible files are available; terms vary by translation and edition.
+
+Plans and licensing terms can change. Direct provider APIs and OAuth are deferred; the Settings hub only links to providers and imports authorized local files.
+
 ## Current content scope
 
-Songs, manually entered Scripture, announcements, sermons, gradient backgrounds, and JSON backup import/export. Sample content includes traditional Amazing Grace lyrics and KJV Psalm 100. Use content you have permission to display. Static background images are embedded with service content and synchronize with its revision. There is no video library, licensed song integration, automatic Scripture lookup, or separate media-streaming service.
+Songs, imported or manually entered Scripture, announcements, sermons, gradient backgrounds, and JSON backup import/export. Sample content includes traditional Amazing Grace lyrics and KJV Psalm 100. Static background images are embedded with service content and synchronize with its revision. There is no video library or separate media-streaming service.
 
 ## Windows desktop app (church computer)
 

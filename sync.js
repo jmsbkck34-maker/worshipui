@@ -7,6 +7,10 @@
  if(!meta||!Number.isInteger(meta.baseRevision))meta={baseRevision:0,baseService:null,live:false};
  let identity=null,connected=false,busy=false,pending=null,timer,historyVersion=null,reviewed=null;
  const bridge=window.worshipWorkspace;
+ const initialEntry=bridge.getDateEntry(bridge.getDate());
+ if(initialEntry){meta.baseRevision=initialEntry.baseRevision;meta.baseService=initialEntry.baseService}
+ const serviceUrl=date=>date?'/api/setlists/'+date:'/api/service';
+ const historyUrl=date=>date?'/api/setlists/'+date+'/versions':'/api/versions';
  const panel=document.createElement('section');panel.className='sync-panel';
  panel.innerHTML='<div class="sync-heading"><div><strong>Shared service</strong><p id="syncStatus" role="status">Local only · connect to share</p></div><button id="connect">Connect</button></div><div class="sync-buttons"><button id="liveMode" aria-pressed="false">Enter Live mode</button><button id="publish" disabled>Publish changes</button><button id="reviewUpdate" hidden>Review update</button><button id="history" disabled>Version history</button><button id="recovery">Download recovery</button></div><p id="offlineStatus">Preparing offline app…</p><p id="syncIdentity"></p>';
  document.querySelector('aside').append(panel);
@@ -19,7 +23,13 @@
  const history=document.createElement('dialog');history.id='historyDialog';
  history.innerHTML='<div class="eyebrow">VERSION HISTORY</div><h2>Earlier services</h2><p>Restore into your local workspace, then publish as a new revision. Existing history is preserved.</p><div id="versionList"></div><button id="closeHistory">Close</button>';
  document.body.append(history);
- function saveMeta(){try{workspaceStorage.setItem(META,JSON.stringify(meta));return true}catch{status('Sync paused: device storage is full. Export a backup.');return false}}
+ function saveMeta(){
+   try{
+     const date=bridge.getDate(),entry=bridge.getDateEntry(date);
+     if(entry&&!bridge.setDateEntry(date,{...entry,baseRevision:meta.baseRevision,baseService:structuredClone(meta.baseService)}))throw Error('Setlist metadata could not be saved');
+     workspaceStorage.setItem(META,JSON.stringify(meta));return true;
+   }catch{status('Sync paused: device storage is full. Export a backup.');return false}
+ }
  function dirty(){return !meta.baseService||!core.same(bridge.getService(),meta.baseService)}
  function status(text){$('syncStatus').textContent=text}
  function label(){
@@ -31,6 +41,7 @@
    $('history').disabled=!identity||busy;
    $('connect').textContent=identity?'Sign out':'Connect';
    $('syncIdentity').textContent=identity?identity.username+' · '+identity.role:(meta.username?'Offline copy · '+meta.username:'');
+   $('dateStatus').textContent=bridge.getDate()?'Setlist: '+bridge.getDate():'Undated service';
    bridge.setRole(meta.role||'operator');
  }
  async function api(url,options={}){
@@ -58,7 +69,8 @@
    const decision=core.receive({baseRevision:meta.baseRevision,local:bridge.getService(),dirty:dirty(),live:meta.live,editing:bridge.editing()},version);
    if(decision==='ignore')return;
    if(decision==='acknowledge'){
-     meta.baseRevision=version.revision;meta.baseService=structuredClone(version.service);saveMeta();pending=null;status('All changes downloaded · revision '+version.revision);
+     const old=structuredClone(meta);meta.baseRevision=version.revision;meta.baseService=structuredClone(version.service);
+     if(!saveMeta()){meta=old;return}pending=null;status('All changes downloaded · revision '+version.revision);
    }else if(decision==='apply'){apply(version)}else{
      pending=version;status(decision==='conflict'?'Both copies changed · review to resolve':'Update waiting · review when ready');
    }
@@ -68,8 +80,9 @@
    if(!identity||busy||pending||!dirty())return;
    const snapshot=bridge.getService();busy=true;label();status('Publishing changes…');
    try{
-     const result=await api('/api/service',{method:'PUT',body:JSON.stringify({baseRevision:meta.baseRevision,service:snapshot})});
-     meta.baseRevision=result.version.revision;meta.baseService=structuredClone(snapshot);saveMeta();
+     const result=await api(serviceUrl(bridge.getDate()),{method:'PUT',body:JSON.stringify({baseRevision:meta.baseRevision,service:snapshot})});
+     const old=structuredClone(meta);meta.baseRevision=result.version.revision;meta.baseService=structuredClone(snapshot);
+     if(!saveMeta()){meta=old;return}
      status(dirty()?'New local edits waiting to publish':'Shared copy saved · revision '+meta.baseRevision);
    }catch(error){
      if(error.status===409 && error.body.current){pending=error.body.current;status('Another editor saved first · both copies preserved');}
@@ -80,15 +93,37 @@
    if(busy||!identity)return;
    busy=true;label();
    try{
-     const result=await api('/api/service');
+     const result=await api(serviceUrl(bridge.getDate()));
      receive(result.version);
      if(!pending&&!dirty())status('All changes downloaded · revision '+meta.baseRevision);
    }catch(error){connected=false;status(error.message||'Offline · downloaded service ready')}
    finally{busy=false;label()}
    // Only publish automatically outside Live mode and outside an active edit.
    if(connected&&!pending&&dirty()&&!meta.live&&!bridge.editing())await publish();
+   if(connected&&!meta.live&&!bridge.editing())await syncInactive();
  }
- function readable(service){return service.title+'\n\n'+service.items.map((item,n)=>(n+1)+'. '+item.title+' ['+item.type+']\n'+item.slides.map((s,i)=>'Slide '+(i+1)+'\n'+s).join('\n\n')).join('\n\n────\n\n')}
+ async function syncInactive(){
+   if(busy||!identity)return;
+   const active=bridge.getDate()||'undated',entries=bridge.getDateEntries();
+   const dates=Object.keys(entries).filter(date=>date!==active&&!core.same(entries[date].service,entries[date].baseService));
+   if(!dates.length)return;
+   busy=true;label();
+   try{
+     for(const key of dates){
+       const entry=entries[key],date=key==='undated'?'':key;
+       const result=await api(serviceUrl(date)),remote=result.version;
+       if(remote&&core.same(entry.service,remote.service)){
+         entry.baseRevision=remote.revision;entry.baseService=structuredClone(remote.service);
+       }else if((remote?.revision||0)===entry.baseRevision){
+         const saved=await api(serviceUrl(date),{method:'PUT',body:JSON.stringify({baseRevision:entry.baseRevision,service:entry.service})});
+         entry.baseRevision=saved.version.revision;entry.baseService=structuredClone(entry.service);
+       }else{status('Setlist '+(date||'(undated)')+' has conflicting changes · open it to review');continue}
+       if(!bridge.setDateEntry(date,entry))throw Error('Cannot save sync state for '+(date||'the undated service')+'. Export a backup.');
+     }
+   }catch(error){status(error.message||'Offline · dated setlists are saved on this device')}
+   finally{busy=false;label()}
+ }
+ function readable(service){return service.title+'\n\n'+service.items.map((item,n)=>(n+1)+'. '+item.title+' ['+item.type+']\n'+item.slides.map((text,i)=>'Slide '+(i+1)+'\n'+(item.primaryVersion?item.primaryVersion+'\n':'')+text+(item.secondarySlides?.[i]?'\n\n'+item.secondaryVersion+'\n'+item.secondarySlides[i]:'')).join('\n\n')).join('\n\n────\n\n')}
  function showReview(version,fromHistory=false){
    if(!version)return;
    reviewed=structuredClone(version);historyVersion=fromHistory?version:null;
@@ -110,7 +145,8 @@
  $('keepLocal').onclick=async()=>{
    if(!reviewed||!identity||busy||!backup())return;
    // Explicit replacement still uses compare-and-swap; a newer save will conflict again.
-   meta.baseRevision=reviewed.revision;meta.baseService=structuredClone(reviewed.service);saveMeta();pending=null;review.close();await publish();
+   const old=structuredClone(meta);meta.baseRevision=reviewed.revision;meta.baseService=structuredClone(reviewed.service);
+   if(!saveMeta()){meta=old;return}pending=null;review.close();await publish();
  };
  $('liveMode').onclick=()=>{
    if(meta.role==='editor')return;
@@ -134,11 +170,26 @@
    }catch(error){$('loginError').textContent=error.message}
  };
  $('history').onclick=async()=>{
-   try{const result=await api('/api/versions');$('versionList').replaceChildren();if(!result.versions.length)$('versionList').textContent='No shared versions yet.';
-     result.versions.forEach(version=>{const button=document.createElement('button');button.className='version-entry';button.textContent='Revision '+version.revision+' · '+version.title+' · '+version.author+' · '+new Date(version.savedAt).toLocaleString();button.onclick=async()=>{try{const full=await api('/api/versions/'+version.revision);history.close();showReview(full.version,true)}catch(error){status(error.message)}};$('versionList').append(button)});history.showModal();
-   }catch(error){status(error.message)}
+   if(busy)return;busy=true;label();
+   try{const url=historyUrl(bridge.getDate()),result=await api(url);$('versionList').replaceChildren();if(!result.versions.length)$('versionList').textContent='No shared versions yet.';
+     result.versions.forEach(version=>{const button=document.createElement('button');button.className='version-entry';button.textContent='Revision '+version.revision+' · '+version.title+' · '+version.author+' · '+new Date(version.savedAt).toLocaleString();button.onclick=async()=>{try{const full=await api(url+'/'+version.revision);history.close();showReview(full.version,true)}catch(error){status(error.message)}};$('versionList').append(button)});history.showModal();
+   }catch(error){status(error.message)}finally{busy=false;label()}
  };
  $('closeHistory').onclick=()=>history.close();
+ function openDate(date,copy){
+   if(busy){status('Wait for the current sync to finish before changing dates.');return}
+   if(meta.live){status('Leave Live mode before changing setlist dates.');return}
+   if(bridge.editing()){status('Finish editing before changing setlist dates.');return}
+   if(copy&&bridge.getDateEntry(date)&&!confirm('Replace the local setlist for this date with a copy of the current service? The shared version may require review.'))return;
+   if(!bridge.openDate(date,copy,meta)){status('Choose a valid date and check device storage.');return}
+   const entry=bridge.getDateEntry(date);meta.baseRevision=entry.baseRevision;meta.baseService=entry.baseService;
+   pending=null;reviewed=null;historyVersion=null;saveMeta();label();
+   status(date?'Opened setlist '+date+' · checking for shared changes':'Opened undated service · checking for shared changes');
+   if(identity)sync();
+ }
+ $('openDate').onclick=()=>{if(!$('setlistDate').value){status('Choose a setlist date first.');return}openDate($('setlistDate').value,false)};
+ $('copyDate').onclick=()=>{if(!$('setlistDate').value){status('Choose a setlist date first.');return}openDate($('setlistDate').value,true)};
+ $('openUndated').onclick=()=>openDate('',false);
  window.addEventListener('worship:changed',()=>{
    if(!identity)return;status(pending?'Both copies changed · review to resolve':'Local changes saved · waiting to publish');label();clearTimeout(timer);
    if(!meta.live)timer=setTimeout(sync,1500);
@@ -163,7 +214,7 @@
    }else if('serviceWorker' in navigator){
      try{
        await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;
-       const cache=await caches.open('worshipui-shell-v5');const files=['/','/index.html','/app.js','/style.css','/sync-core.js','/sync.js','/desktop-ui.js','/slide-template.cjs','/assets/fonts/Inter.ttf','/assets/fonts/Montserrat.ttf','/assets/fonts/Lato.ttf','/assets/fonts/Merriweather.ttf','/assets/fonts/PlayfairDisplay.ttf','/assets/fonts/Oswald.ttf','/assets/fonts/Poppins.ttf','/assets/fonts/SourceSans3.ttf'];
+       const cache=await caches.open('worshipui-shell-v7');const files=['/','/index.html','/app.js','/content-import.js','/bible-search.js','/assets/bibles/kjv.vpl.txt','/style.css','/sync-core.js','/sync.js','/desktop-ui.js','/slide-template.cjs','/assets/fonts/Inter.ttf','/assets/fonts/Montserrat.ttf','/assets/fonts/Lato.ttf','/assets/fonts/Merriweather.ttf','/assets/fonts/PlayfairDisplay.ttf','/assets/fonts/Oswald.ttf','/assets/fonts/Poppins.ttf','/assets/fonts/SourceSans3.ttf'];
        const ready=(await Promise.all(files.map(file=>cache.match(file)))).every(Boolean);
        $('offlineStatus').textContent=ready?'✓ App downloaded · text service available offline':'Offline download incomplete · keep this window open';
      }catch{$('offlineStatus').textContent='Offline app download unavailable · keep this window open'}

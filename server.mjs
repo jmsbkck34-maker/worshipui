@@ -7,6 +7,19 @@ import path from 'node:path';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const hash = text => createHash('sha256').update(text).digest('hex');
+function validDate(value) {
+  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) return false;
+  const date = new Date(value + 'T00:00:00Z');
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0,10) === value;
+}
+function validTranslations(item) {
+  if (item.primaryVersion !== undefined && (item.type !== 'Scripture' || typeof item.primaryVersion !== 'string' || item.primaryVersion.length > 80)) return false;
+  if (item.secondarySlides === undefined && item.secondaryVersion === undefined) return true;
+  return item.type === 'Scripture' && typeof item.primaryVersion === 'string' && item.primaryVersion.length > 0 && item.primaryVersion.length <= 80 &&
+    typeof item.secondaryVersion === 'string' && item.secondaryVersion.trim().length > 0 && item.secondaryVersion.length <= 80 &&
+    Array.isArray(item.secondarySlides) && item.secondarySlides.length === item.slides.length && item.secondarySlides.length <= 200 &&
+    item.secondarySlides.every(text => typeof text === 'string' && text.length > 0 && text.length <= 20000);
+}
 export function validService(s) {
   return s && typeof s.title === 'string' && s.title.length <= 100 &&
     Array.isArray(s.items) && s.items.length <= 200 &&
@@ -16,7 +29,7 @@ export function validService(s) {
       ['Song','Scripture','Announcement','Sermon'].includes(i.type) &&
       ['dusk','ocean','ember','midnight'].includes(i.theme) && SlideTemplate.validTemplate(i.template) &&
       Array.isArray(i.slides) && i.slides.length > 0 && i.slides.length <= 200 &&
-      i.slides.every(t => typeof t === 'string' && t.length <= 20000));
+      i.slides.every(t => typeof t === 'string' && t.length <= 20000) && validTranslations(i));
 }
 function passwordHash(password, salt) { return scryptSync(password, salt, 64).toString('hex'); }
 export async function openStore(directory) {
@@ -59,6 +72,19 @@ export async function openStore(directory) {
         next.versions.push(version);
         return {version};
       });
+    },
+    async saveDated(date, base, service, username) {
+      if (!validDate(date)) throw Error('Invalid date');
+      return mutate(next => {
+        next.datedVersions ||= {};
+        const versions = next.datedVersions[date] ||= [];
+        const latest = versions.at(-1);
+        if (base !== (latest?.revision || 0)) return {conflict:true, current:latest || null};
+        const version = {revision:(latest?.revision || 0)+1, service,
+          author:username, savedAt:new Date().toISOString()};
+        versions.push(version);
+        return {version};
+      });
     }
   };
 }
@@ -66,7 +92,8 @@ export function createApp(store, {origin='http://127.0.0.1:8090', secure=false}=
   const sessions = new Map(), attempts = new Map();
   const publicFiles = new Map([
     ['/', ['index.html','text/html']], ['/index.html',['index.html','text/html']],
-    ['/style.css',['style.css','text/css']], ['/app.js',['app.js','text/javascript']],
+    ['/style.css',['style.css','text/css']], ['/app.js',['app.js','text/javascript']], ['/content-import.js',['content-import.js','text/javascript']],
+    ['/bible-search.js',['bible-search.js','text/javascript']], ['/assets/bibles/kjv.vpl.txt',['assets/bibles/kjv.vpl.txt','text/plain']],
     ['/sync.js',['sync.js','text/javascript']], ['/sync-core.js',['sync-core.js','text/javascript']],
     ['/sw.js',['sw.js','text/javascript']], ['/desktop-ui.js',['desktop-ui.js','text/javascript']], ['/slide-template.cjs',['slide-template.cjs','text/javascript']],['/assets/fonts/Inter.ttf',['assets/fonts/Inter.ttf','font/ttf']],['/assets/fonts/Montserrat.ttf',['assets/fonts/Montserrat.ttf','font/ttf']],['/assets/fonts/Lato.ttf',['assets/fonts/Lato.ttf','font/ttf']],['/assets/fonts/Merriweather.ttf',['assets/fonts/Merriweather.ttf','font/ttf']],['/assets/fonts/PlayfairDisplay.ttf',['assets/fonts/PlayfairDisplay.ttf','font/ttf']],['/assets/fonts/Oswald.ttf',['assets/fonts/Oswald.ttf','font/ttf']],['/assets/fonts/Poppins.ttf',['assets/fonts/Poppins.ttf','font/ttf']],['/assets/fonts/SourceSans3.ttf',['assets/fonts/SourceSans3.ttf','font/ttf']]
   ]);
@@ -132,6 +159,26 @@ export function createApp(store, {origin='http://127.0.0.1:8090', secure=false}=
       if(url.pathname==='/api/me' && req.method==='GET') return send(200,{username:user.username,role:user.role});
       if(url.pathname==='/api/logout' && req.method==='POST') {
         sessions.delete(sessionKey);return send(200,{ok:true},{'Set-Cookie':cookieValue('',0)});
+      }
+      const dated=url.pathname.match(/^\/api\/setlists\/([0-9]{4}-[0-9]{2}-[0-9]{2})(?:\/versions(?:\/([0-9]+))?)?$/);
+      if(dated) {
+        const date=dated[1];
+        if(!validDate(date)) return send(400,{error:'Invalid date'});
+        const versions=store.state().datedVersions?.[date] || [];
+        const history=url.pathname.includes('/versions');
+        if(req.method==='GET' && history && dated[2]) {
+          const version=versions.find(v=>v.revision===Number(dated[2]));
+          return send(version?200:404,version?{version}:{error:'Version not found'});
+        }
+        if(req.method==='GET' && history) return send(200,{versions:versions.slice(-100).reverse().map(({service,...v})=>({...v,title:service.title}))});
+        if(req.method==='GET') return send(200,{version:versions.at(-1)||null});
+        if(req.method==='PUT' && !history) {
+          const b=await body();
+          if(!Number.isInteger(b?.baseRevision)||b.baseRevision<0||!validService(b.service)) return send(400,{error:'Invalid service or revision'});
+          const result=await store.saveDated(date,b.baseRevision,b.service,user.username);
+          return send(result.conflict?409:200,result);
+        }
+        return send(405,{error:'Method not allowed'});
       }
       if(url.pathname==='/api/service' && req.method==='GET') return send(200,{version:store.state().versions.at(-1)||null});
       if(url.pathname==='/api/service' && req.method==='PUT') {

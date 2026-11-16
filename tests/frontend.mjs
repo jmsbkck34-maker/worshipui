@@ -3,12 +3,16 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 const clone=value=>JSON.parse(JSON.stringify(value));
 export async function frontendTests(){
- const sources=await Promise.all(['slide-template.cjs','app.js','sync-core.js','sync.js'].map(file=>readFile(new URL('../'+file,import.meta.url),'utf8')));
+ const html=await readFile(new URL('../index.html',import.meta.url),'utf8');
+ assert.match(html,/href="https:\/\/www\.songselect\.ccli\.com\/"/);
+ assert.doesNotMatch(html,/id="lyricsFile"/);
+ const sources=await Promise.all(['slide-template.cjs','content-import.js','bible-search.js','app.js','sync-core.js','sync.js'].map(file=>readFile(new URL('../'+file,import.meta.url),'utf8')));
+ const kjv=await readFile(new URL('../assets/bibles/kjv.vpl.txt',import.meta.url),'utf8');
  const initial={title:'Sunday',items:[{id:'song',title:'Original',type:'Song',theme:'dusk',slides:['Original verse','Original chorus']}]};
  const key='worshipui.service.v1',liveKey='worshipui.live.v1',metaKey='worshipui.sync.v1';
  let checks=0;function check(a,b){assert.equal(JSON.stringify(a),JSON.stringify(b));checks++}
- async function client(role='operator',online=true){
-   const nodes=new Map(),storage=new Map([[key,JSON.stringify(initial)],[metaKey,JSON.stringify({baseRevision:1,baseService:initial,live:false,role,username:role})]]),intervals=[];
+ async function client(role='operator',online=true,savedStorage=null){
+   const nodes=new Map(),storage=savedStorage||new Map([[key,JSON.stringify(initial)],[metaKey,JSON.stringify({baseRevision:1,baseService:initial,live:false,role,username:role})]]),intervals=[],dated=new Map();
    function element(){return {value:'',open:false,style:{setProperty(key,value){this[key]=value}},children:[],textContent:'',append(...children){this.children.push(...children)},replaceChildren(){this.children=[]},setAttribute(){},showModal(){this.open=true},close(){this.open=false},click(){return this.onclick?.()},innerHTML:''}}
    const node=id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id)};
    let remote={revision:1,service:clone(initial),author:'home',savedAt:new Date().toISOString()};
@@ -18,10 +22,16 @@ export async function frontendTests(){
      localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},navigator:{},AbortSignal:{timeout(){}},
      confirm:()=>true,setInterval:fn=>intervals.push(fn),setTimeout:()=>1,clearTimeout(){},
      addEventListener(type,fn){listeners.set(type,fn)},dispatchEvent(event){listeners.get(event.type)?.(event)},
-     async fetch(url,options={}){if(!online)throw Error('Offline');
+     async fetch(url,options={}){if(url==='/assets/bibles/kjv.vpl.txt')return {ok:true,text:async()=>kjv};if(!online)throw Error('Offline');
        let response;
        if(url==='/api/me'||url==='/api/login')response={username:role,role};
-       else if(url==='/api/service'&&options.method==='PUT'){
+       else if(url.startsWith('/api/setlists/')){
+         const date=url.slice('/api/setlists/'.length),current=dated.get(date)||null;
+         if(options.method==='PUT'){
+           const body=JSON.parse(options.body);if(body.baseRevision!==(current?.revision||0))return {ok:false,status:409,json:async()=>({current:clone(current)})};
+           const version={revision:(current?.revision||0)+1,service:body.service,author:role,savedAt:new Date().toISOString()};dated.set(date,version);response={version:clone(version)};
+         }else response={version:clone(current)};
+       }else if(url==='/api/service'&&options.method==='PUT'){
          const body=JSON.parse(options.body);if(body.baseRevision!==remote.revision)return {ok:false,status:409,json:async()=>({current:clone(remote)})};
          remote={revision:remote.revision+1,service:body.service,author:role,savedAt:new Date().toISOString()};response={version:clone(remote)};
        }else if(url==='/api/service')response={version:clone(remote)};
@@ -30,7 +40,7 @@ export async function frontendTests(){
      }};
    context.window=context;vm.createContext(context);sources.forEach(source=>vm.runInContext(source,context));
    await new Promise(resolve=>setTimeout(resolve,0));
-   return {nodes,node,storage,context,setRemote:v=>remote=v,setOnline:v=>online=v,async poll(){await intervals[0]();await new Promise(resolve=>setTimeout(resolve,0))}};
+   return {nodes,node,storage,context,setRemote:v=>remote=v,setDated:(date,v)=>dated.set(date,v),getDated:date=>dated.get(date),setOnline:v=>online=v,async poll(){await intervals[0]();await new Promise(resolve=>setTimeout(resolve,0))}};
  }
  const church=await client();
  check(church.node('order').children.length,1);
@@ -85,5 +95,65 @@ export async function frontendTests(){
  check(motions.node('preview').className.includes('motion-paused'),true);
  motions.node('take').onclick();check(JSON.parse(motions.storage.get(liveKey)).template.motion,'aurora');check(JSON.parse(motions.storage.get(liveKey)).template.font,'Montserrat');
  motions.node('blackout').onclick();check(motions.node('live').className.includes('motion-background'),false);
+ const imports=await client();imports.node('settings').onclick();check(imports.node('settingsDialog').open,true);check(imports.context.worshipWorkspace.editing(),true);
+ imports.node('ccliChurchCopyright').value='123456';imports.node('ccliStreaming').value='234567';imports.node('ccliStreamingPlus').value='345678';imports.node('ccliRehearsal').value='456789';imports.node('saveCcliSettings').onclick();
+ check(JSON.parse(imports.storage.get('worshipui.ccli.v1')),{churchCopyright:'123456',streaming:'234567',streamingPlus:'345678',rehearsal:'456789'});
+ check(JSON.stringify(imports.context.worshipWorkspace.getService()).includes('123456'),false);
+ check(imports.context.worshipWorkspace.getService().items.length,1);imports.node('take').onclick();
+ check(JSON.parse(imports.storage.get(liveKey)).ccliFooter,'CCLI License #123456');
+ imports.node('scriptureVersion').value='ESV';imports.node('scriptureReference').value='John 3:16';imports.node('scriptureText').value='First verse text\n\nSecond verse text';
+ imports.node('secondaryScriptureVersion').value='Reina-Valera 1960';imports.node('secondaryScriptureText').value='Primer versículo\n\nSegundo versículo';
+ imports.node('scriptureText').oninput();
+ imports.node('secondaryScriptureText').value='Un solo versículo';imports.node('secondaryScriptureText').oninput();
+ check(imports.node('addScripture').disabled,true);
+ imports.node('secondaryScriptureText').value='Primer versículo\n\nSegundo versículo';imports.node('secondaryScriptureText').oninput();
+ check(imports.node('addScripture').disabled,false);imports.node('addScripture').onclick();
+ const added=imports.context.worshipWorkspace.getService().items[1];
+ check(added.title,'John 3:16 · ESV');check(added.slides,['First verse text','Second verse text']);
+ check(added.primaryVersion,'ESV');check(added.secondaryVersion,'Reina-Valera 1960');check(added.secondarySlides,['Primer versículo','Segundo versículo']);
+ check(imports.node('preview').children[0].className,'slide-columns');check(imports.node('preview').children[0].children.length,2);
+ imports.node('take').onclick();check(JSON.parse(imports.storage.get(liveKey)).secondaryText,'Primer versículo');
+ check(JSON.parse(imports.storage.get(liveKey)).nextSecondaryText,'Segundo versículo');
+ imports.node('edit').onclick();check(imports.node('itemSecondaryVersion').value,'Reina-Valera 1960');
+ imports.node('itemSecondaryText').value='Uno';imports.node('itemForm').onsubmit({preventDefault(){}});
+ check(imports.node('toast').textContent,'Both translations must have the same number of slides.');
+ // Dated workspaces are retained offline and independently uploaded on reconnect.
+ const calendar=await client('operator',false);
+ calendar.node('setlistDate').value='2026-12-06';calendar.node('copyDate').onclick();
+ check(calendar.context.worshipWorkspace.getService(),initial);
+ calendar.node('serviceTitle').oninput({target:{value:'First Sunday'}});
+ calendar.node('setlistDate').value='2026-12-13';calendar.node('openDate').onclick();
+ check(calendar.context.worshipWorkspace.getService().items.length,0);
+ calendar.node('serviceTitle').oninput({target:{value:'Second Sunday'}});
+ calendar.node('openUndated').onclick();check(calendar.context.worshipWorkspace.getService(),initial);
+ calendar.setOnline(true);await calendar.poll();
+ check(calendar.getDated('2026-12-06').service.title,'First Sunday');
+ check(calendar.getDated('2026-12-13').service.title,'Second Sunday');
+ const reopened=await client('operator',false,calendar.storage);
+ reopened.node('setlistDate').value='2026-12-06';reopened.node('openDate').onclick();
+ check(reopened.context.worshipWorkspace.getService().title,'First Sunday');
+ reopened.node('liveMode').onclick();reopened.node('setlistDate').value='2026-12-13';reopened.node('openDate').onclick();
+ check(reopened.context.worshipWorkspace.getDate(),'2026-12-06');
+ const datedConflict=await client('operator',false);
+ datedConflict.node('setlistDate').value='2026-12-20';datedConflict.node('openDate').onclick();
+ datedConflict.node('serviceTitle').oninput({target:{value:'Local Sunday'}});
+ const remoteDate={revision:1,service:{title:'Remote Sunday',items:[]},author:'home',savedAt:new Date().toISOString()};
+ datedConflict.setDated('2026-12-20',remoteDate);datedConflict.setOnline(true);await datedConflict.poll();
+ check(datedConflict.context.worshipWorkspace.getService().title,'Local Sunday');check(datedConflict.node('reviewUpdate').hidden,false);
+ datedConflict.node('reviewUpdate').onclick();datedConflict.node('acceptRemote').onclick();
+ check(datedConflict.context.worshipWorkspace.getService().title,'Remote Sunday');
+ // Saved and imported songs can be selected in the editor; KJV works offline.
+ const content=await client('operator',false);
+ content.node('add').onclick();content.node('titleInput').value='Local song';content.node('textInput').value='First slide\n\nSecond slide';
+ content.node('saveSongTemplate').onclick();check(JSON.parse(content.storage.get('worshipui.songs.v1')).songs.length,1);
+ content.node('songSearch').value='Local';content.node('songSearch').oninput();check(content.node('songResults').children.length,1);
+ content.node('songResults').children[0].onclick();content.node('itemForm').onsubmit({preventDefault(){}});
+ check(content.context.worshipWorkspace.getService().items[1].title,'Local song');
+ content.node('add').onclick();await content.node('songFile').onchange({target:{files:[{name:'Imported.txt',size:11,text:async()=>'Verse text'}],value:'Imported.txt'}});
+ check(JSON.parse(content.storage.get('worshipui.songs.v1')).songs.length,2);
+ content.node('typeInput').value='Scripture';content.node('typeInput').onchange();content.node('bibleQuery').value='John 3:16-17';await content.node('searchBible').onclick();
+ check(content.node('bibleResults').children.length,1);content.node('bibleResults').children[0].onclick();
+ check(content.node('itemPrimaryVersion').value,'KJV');content.node('itemForm').onsubmit({preventDefault(){}});
+ check(content.context.worshipWorkspace.getService().items.at(-1).slides.length,2);
  return checks;
 }

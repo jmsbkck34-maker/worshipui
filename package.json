@@ -23,6 +23,8 @@
                                 "desktop/**",
                                 "index.html",
                                 "app.js",
+                                "content-import.js",
+                                "bible-search.js",
                                 "sync.js",
                                 "sync-core.js",
                                 "desktop-ui.js",

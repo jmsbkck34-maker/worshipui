@@ -13,9 +13,22 @@ test('desktop workspace survives restarts, rejects invalid writes, keeps recover
  const directory=await mkdtemp(path.join(os.tmpdir(),'wui-desktop-'));
  try{
   const first=openDeviceStore(directory);first.setItem(key,JSON.stringify(service));
+  const ccli={churchCopyright:'123456',streaming:'234567',streamingPlus:'345678',rehearsal:'456789'};
+  first.setItem('worshipui.ccli.v1',JSON.stringify(ccli));
   first.setItem('worshipui.live.v1',JSON.stringify({text:'Live slide'}));
-  const second=openDeviceStore(directory);assert.deepEqual(JSON.parse(second.getItem(key)),service);assert.equal(second.getItem('worshipui.live.v1'),null);
+  const second=openDeviceStore(directory);assert.deepEqual(JSON.parse(second.getItem(key)),service);assert.deepEqual(JSON.parse(second.getItem('worshipui.ccli.v1')),ccli);assert.equal(second.getItem('worshipui.live.v1'),null);
   assert.throws(()=>second.setItem(key,'{"title":"invalid"}'));assert.deepEqual(JSON.parse(second.getItem(key)),service);
+  assert.throws(()=>second.setItem('worshipui.ccli.v1',JSON.stringify({...ccli,streaming:123})),/Invalid CCLI settings/);
+  const library={version:1,active:'2026-12-06',entries:{'2026-12-06':{service,baseRevision:1,baseService:service}}};
+  second.setItem('worshipui.setlists.v1',JSON.stringify(library));
+  assert.deepEqual(JSON.parse(openDeviceStore(directory).getItem('worshipui.setlists.v1')),library);
+  assert.throws(()=>second.setItem('worshipui.setlists.v1',JSON.stringify({...library,active:'2026-02-30'})),/Invalid setlist library/);
+  const songLibrary={version:1,songs:[{id:'one',title:'Song',type:'Song',theme:'dusk',slides:['Verse']}]};
+  second.setItem('worshipui.songs.v1',JSON.stringify(songLibrary));
+  assert.deepEqual(JSON.parse(openDeviceStore(directory).getItem('worshipui.songs.v1')),songLibrary);
+  assert.throws(()=>second.setItem('worshipui.songs.v1',JSON.stringify({version:1,songs:[service.items[0]]})),/Invalid song library/);
+  const misaligned={title:'Scripture',items:[{id:'verse',title:'John 3:16',type:'Scripture',theme:'dusk',slides:['One','Two'],primaryVersion:'ESV',secondaryVersion:'NIV',secondarySlides:['Uno']}]};
+  assert.throws(()=>second.setItem(key,JSON.stringify(misaligned)),/Invalid service/);
   const updated={...service,title:'Revised service'};second.setItem(key,JSON.stringify(updated));
   const backup=JSON.parse(await readFile(path.join(directory,'device.previous.json'),'utf8'));assert.deepEqual(JSON.parse(backup[key]),service);
   assert.throws(()=>second.setItem('arbitrary-file-path','{}'));
@@ -29,7 +42,7 @@ test('desktop accepts only a plain HTTPS shared-service origin',()=>{
 test('packaged app and screens are served locally with internet unavailable',async()=>{
  const host=await createDesktopHost(root);
  try{
-  for(const url of ['/','/?view=audience','/?view=stage','/app.js','/sync.js','/sync-core.js','/style.css','/desktop-ui.js','/slide-template.cjs',...Object.values((await import('../slide-template.cjs')).default.bundledFonts).map(font=>'/assets/fonts/'+font+'.ttf')]){
+  for(const url of ['/','/?view=audience','/?view=stage','/app.js','/content-import.js','/bible-search.js','/assets/bibles/kjv.vpl.txt','/sync.js','/sync-core.js','/style.css','/desktop-ui.js','/slide-template.cjs',...Object.values((await import('../slide-template.cjs')).default.bundledFonts).map(font=>'/assets/fonts/'+font+'.ttf')]){
    const response=await fetch(host.origin+url);assert.equal(response.status,200);assert.ok((await response.arrayBuffer()).byteLength>0);
   }
   assert.equal((await fetch(host.origin+'/api/me')).status,503);

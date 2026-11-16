@@ -1,8 +1,195 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Worship UI · Service workspace</title><link rel="stylesheet" href="style.css"></head><body>
-<header><a class="brand" href="./">✦ <span>Worship<span class="muted">UI</span></span></a><span class="workspace">SUNDAY WORKSPACE</span><div class="header-actions"><span id="saveState" role="status">Saved on this device</span><button id="export">Export</button><label class="button">Import<input id="import" type="file" accept="application/json" hidden></label><button id="audience">↗ Audience</button><button id="stage">↗ Stage</button></div></header>
-<main><aside><div class="eyebrow">YOUR SERVICE</div><input id="serviceTitle" aria-label="Service title" maxlength="100"><div class="subtle">A little preparation. A peaceful Sunday.</div><div class="section-label">ORDER OF SERVICE <span id="itemCount"></span></div><nav id="order" aria-label="Service order"></nav><button class="add" id="add">＋ Add service item</button><div class="aside-bottom"><span class="status-dot"></span> Local workspace · works offline<br><small>Keep a backup with Export.</small></div></aside>
-<section class="editor"><div class="editor-top"><div><div class="eyebrow">PREPARE & PRESENT</div><h1 id="selectedTitle"></h1></div><button id="edit">Edit item</button></div><div class="editor-meta"><span id="itemType"></span><span>Choose a slide, then take it live</span></div><div id="slides" class="slides"></div><div class="theme-panel"><div><strong>Edit slide template</strong><p id="templateSummary">Background and text for this item</p><button id="templateEdit">Edit slide template</button></div><div id="themes" class="themes"></div></div><div class="tip"><span>⌨</span><div><strong>Room to focus on worship.</strong><p>Arrow keys move the preview. Space takes it live. B blacks out the screen.</p></div></div></section>
-<section class="monitor"><div class="section-label">PREVIEW <span>NOT ON SCREEN</span></div><div id="preview" class="screen"></div><button id="take" class="primary">Take live <span>Space ↵</span></button><div class="section-label live-label"><span><i class="status-dot"></i> LIVE OUTPUT</span><span id="liveStatus">READY</span></div><div id="live" class="screen"></div><div class="transport"><button id="previous" aria-label="Previous slide">← Previous</button><button id="next">Next →</button></div><div class="clear-controls"><button id="clear">Clear lyrics</button><button id="blackout" aria-pressed="false">Blackout</button></div><div class="readiness"><strong>Before you begin</strong><p id="ready"></p><p>Open Audience, move that window to your projector, then enter fullscreen. Open Stage for current and next text.</p></div></section></main>
-<dialog id="templateDialog"><div class="eyebrow">SLIDE APPEARANCE</div><h2>Edit slide template</h2><p class="subtle">Applies to all slides in this item. Your live screen changes only when you choose Take live.</p><section class="motion-picker"><h3>Motion backgrounds</h3><div id="motionChoices" class="motion-choices"></div><label class="motion-toggle"><input id="motionEnabled" type="checkbox" checked> Animate background</label><p class="subtle">Gentle built-in loops · work offline. Reduced-motion settings keep them still.</p></section><div class="template-controls"><section><h3>Background</h3><label>Color wheel<input id="backgroundColor" type="color" value="#28334f"></label><button id="eyedropper" type="button">⌖ Pick screen color</button><label class="button image-import">Import image<input id="backgroundImage" type="file" accept="image/png,image/jpeg,image/webp" hidden></label><button id="removeImage" type="button" hidden>Remove image</button><p id="imageStatus" class="subtle" role="status">PNG, JPEG or WebP · saved with your service for offline use.</p></section><section><h3>Text</h3><label>Font<select id="textFont"></select></label><label>Font size<input id="textSize" type="number" min="24" max="200" step="1" value="80"></label><p class="subtle">Size is measured on a 1920-pixel-wide slide and scales with your screen. Fonts marked “included” are bundled for offline use. Other fonts use those installed on each computer.</p></section></div><div class="dialog-actions"><button class="primary" id="closeTemplate">Done</button></div></dialog>
-<dialog id="itemDialog"><form id="itemForm"><div class="eyebrow">SERVICE ITEM</div><h2 id="dialogTitle">Add to your service</h2><label>Title<input id="titleInput" required maxlength="100"></label><label>Type<select id="typeInput"><option>Song</option><option>Scripture</option><option>Announcement</option><option>Sermon</option></select></label><label>Slide text<textarea id="textInput" rows="9" placeholder="Enter lyrics or text. Separate slides with a blank line." required></textarea></label><p class="subtle">Separate slides with a blank line. Use lyrics and Bible translations you have permission to display. Scripture is entered manually in this prototype.</p><div class="dialog-actions"><button type="button" id="delete">Delete item</button><span></span><button type="button" id="cancel">Cancel</button><button class="primary" type="submit">Save item</button></div></form></dialog><div id="toast" role="status"></div><script src="slide-template.cjs"></script><script src="app.js"></script><script src="sync-core.js"></script><script src="sync.js"></script><script src="desktop-ui.js"></script></body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Worship UI · Service workspace</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+ <a class="brand" href="./">✦ <span>Worship<span class="muted">UI</span></span></a>
+ <span class="workspace">SUNDAY WORKSPACE</span>
+ <div class="header-actions">
+  <span id="saveState" role="status">Saved on this device</span>
+  <button id="settings" type="button">Settings</button>
+  <button id="export">Export</button>
+  <label class="button">Import<input id="import" type="file" accept="application/json" hidden></label>
+  <button id="audience">↗ Audience</button>
+  <button id="stage">↗ Stage</button>
+ </div>
+</header>
+<main>
+ <aside>
+  <div class="date-picker">
+   <label for="setlistDate">SETLIST CALENDAR</label>
+   <input id="setlistDate" type="date">
+   <div><button id="openDate" type="button">Open date</button><button id="copyDate" type="button">Copy to date</button></div>
+   <button id="openUndated" type="button">Undated service</button>
+   <p id="dateStatus" role="status">Undated service</p>
+  </div>
+  <div class="eyebrow">YOUR SERVICE</div>
+  <input id="serviceTitle" aria-label="Service title" maxlength="100">
+  <div class="subtle">A little preparation. A peaceful Sunday.</div>
+  <div class="section-label">ORDER OF SERVICE <span id="itemCount"></span></div>
+  <nav id="order" aria-label="Service order"></nav>
+  <button class="add" id="add">＋ Add service item</button>
+  <div class="aside-bottom"><span class="status-dot"></span> Local workspace · works offline<br><small>Keep a backup with Export.</small></div>
+ </aside>
+ <section class="editor">
+  <div class="editor-top"><div><div class="eyebrow">PREPARE & PRESENT</div><h1 id="selectedTitle"></h1></div><button id="edit">Edit item</button></div>
+  <div class="editor-meta"><span id="itemType"></span><span>Choose a slide, then take it live</span></div>
+  <div id="slides" class="slides"></div>
+  <div class="theme-panel">
+   <div><strong>Edit slide template</strong><p id="templateSummary">Background and text for this item</p><button id="templateEdit">Edit slide template</button></div>
+   <div id="themes" class="themes"></div>
+  </div>
+  <div class="tip"><span>⌨</span><div><strong>Room to focus on worship.</strong><p>Arrow keys move the preview. Space takes it live. B blacks out the screen.</p></div></div>
+ </section>
+ <section class="monitor">
+  <div class="section-label">PREVIEW <span>NOT ON SCREEN</span></div>
+  <div id="preview" class="screen"></div>
+  <button id="take" class="primary">Take live <span>Space ↵</span></button>
+  <div class="section-label live-label"><span><i class="status-dot"></i> LIVE OUTPUT</span><span id="liveStatus">READY</span></div>
+  <div id="live" class="screen"></div>
+  <div class="transport"><button id="previous" aria-label="Previous slide">← Previous</button><button id="next">Next →</button></div>
+  <div class="clear-controls"><button id="clear">Clear lyrics</button><button id="blackout" aria-pressed="false">Blackout</button></div>
+  <div class="readiness"><strong>Before you begin</strong><p id="ready"></p><p>Open Audience, move that window to your projector, then enter fullscreen. Open Stage for current and next text.</p></div>
+ </section>
+</main>
+<dialog id="templateDialog">
+ <div class="eyebrow">SLIDE APPEARANCE</div>
+ <h2>Edit slide template</h2>
+ <p class="subtle">Applies to all slides in this item. Your live screen changes only when you choose Take live.</p>
+ <section class="motion-picker">
+  <h3>Motion backgrounds</h3>
+  <div id="motionChoices" class="motion-choices"></div>
+  <label class="motion-toggle"><input id="motionEnabled" type="checkbox" checked> Animate background</label>
+  <p class="subtle">Gentle built-in loops · work offline. Reduced-motion settings keep them still.</p>
+ </section>
+ <div class="template-controls">
+  <section>
+   <h3>Background</h3>
+   <label>Color wheel<input id="backgroundColor" type="color" value="#28334f"></label>
+   <button id="eyedropper" type="button">⌖ Pick screen color</button>
+   <label class="button image-import">Import image<input id="backgroundImage" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>
+   <button id="removeImage" type="button" hidden>Remove image</button>
+   <p id="imageStatus" class="subtle" role="status">PNG, JPEG or WebP · saved with your service for offline use.</p>
+  </section>
+  <section>
+   <h3>Text</h3>
+   <label>Font<select id="textFont"></select></label>
+   <label>Font size<input id="textSize" type="number" min="24" max="200" step="1" value="80"></label>
+   <p class="subtle">Size is measured on a 1920-pixel-wide slide and scales with your screen. Fonts marked “included” are bundled for offline use. Other fonts use those installed on each computer.</p>
+  </section>
+ </div>
+ <div class="dialog-actions"><button class="primary" id="closeTemplate">Done</button></div>
+</dialog>
+<dialog id="settingsDialog" aria-labelledby="settingsTitle">
+ <div class="settings-top">
+  <div><div class="eyebrow">CONTENT SOURCES</div><h2 id="settingsTitle">Lyrics & Scripture</h2></div>
+  <button id="closeSettings" type="button">Done</button>
+ </div>
+ <p class="subtle">SongSelect opens the CCLI service for lyrics. Bible text can be pasted or imported from a source you are authorized to use. Worship UI does not sign in or fetch licensed text.</p>
+ <div class="settings-grid">
+  <section class="provider-section">
+   <h3>Lyrics</h3>
+   <article class="provider-card">
+    <div><strong>CCLI SongSelect</strong><span class="source-badge">Included with an active Church Copyright License</span></div>
+    <p>SongSelect provides lyrics to eligible CCLI license holders. Sign in at CCLI to search and retrieve songs; Worship UI links there and does not import lyrics automatically.</p>
+    <a href="https://www.songselect.ccli.com/" target="_blank" rel="noopener noreferrer">Open SongSelect</a>
+   </article>
+  </section>
+  <section class="provider-section">
+   <h3>Bible text providers</h3>
+   <article class="provider-card">
+    <div><strong>API.Bible</strong><span class="source-badge">Free starter · licensed texts</span></div>
+    <p>Starter includes up to three licensed Bibles for non-commercial use and 5,000 calls per month. Commercial access and further use require the applicable license; its terms include storage and copy restrictions.</p>
+    <a href="https://docs.api.bible/" target="_blank" rel="noopener noreferrer">Read API docs & terms</a>
+   </article>
+   <article class="provider-card">
+    <div><strong>ESV API</strong><span class="source-badge">Free non-commercial use</span></div>
+    <p>Requires an API key and attribution. Local caching is limited to 500 verses; follow Crossway’s full terms.</p>
+    <a href="https://api.esv.org/api/" target="_blank" rel="noopener noreferrer">Read ESV API terms</a>
+   </article>
+   <article class="provider-card">
+    <div><strong>eBible.org</strong><span class="source-badge">Free downloads · rights vary</span></div>
+    <p>Offers downloadable Bible files in multiple formats. Check the rights and territory for the specific translation you import.</p>
+    <a href="https://ebible.org/" target="_blank" rel="noopener noreferrer">Browse Bible downloads</a>
+   </article>
+  </section>
+ </div>
+ <section class="content-import ccli-settings">
+  <h3>CCLI license registrations</h3>
+  <p class="subtle">Store your church’s license numbers on this device. When set, the Church Copyright License number appears on Song slides; other numbers are not printed. Keep required song title, writer, and copyright notices with the lyrics.</p>
+  <div class="license-fields">
+   <label>Church Copyright License number<input id="ccliChurchCopyright" type="text" maxlength="80" autocomplete="off"></label>
+   <label>Streaming License number<input id="ccliStreaming" type="text" maxlength="80" autocomplete="off"></label>
+   <label>Streaming Plus License number<input id="ccliStreamingPlus" type="text" maxlength="80" autocomplete="off"></label>
+   <label>Rehearsal License number<input id="ccliRehearsal" type="text" maxlength="80" autocomplete="off"></label>
+  </div>
+  <button id="saveCcliSettings" type="button" class="primary">Save CCLI numbers</button>
+  <p id="ccliStatus" role="status">Saved on this device only; not included in service exports or sync.</p>
+ </section>
+ <section class="content-import">
+  <h3>Import Scripture</h3>
+  <p class="subtle">The text must come from a source you are authorized to use. Paste it or import a text, CSV, USFM, or USX file; imported text is saved with this service.</p>
+  <div class="scripture-fields">
+   <label>Bible version<select id="scriptureVersion"><option value="NIV">New International Version (NIV)</option><option value="ESV">English Standard Version (ESV)</option><option value="KJV">King James Version (KJV)</option><option value="NLT">New Living Translation (NLT)</option><option value="NKJV">New King James Version (NKJV)</option><option value="CSB">Christian Standard Bible (CSB)</option><option value="NIRV">New International Reader’s Version (NIrV)</option><option value="NRSV">New Revised Standard Version (NRSV)</option><option value="NASB">New American Standard Bible (NASB)</option><option value="MSG">The Message (MSG)</option></select></label>
+   <label>Passage reference<input id="scriptureReference" maxlength="100" placeholder="e.g. John 3:16–17"></label>
+  </div>
+  <p class="subtle">English-only list: nine English entries from the ECPA 2025 bestseller top ten, with The Message in place of the Spanish Reina-Valera. This is not a strict sales ranking.</p>
+  <label>Scripture text<textarea id="scriptureText" rows="5" placeholder="Paste authorized text here. Separate slides or verses with a blank line."></textarea></label>
+  <label>Or import a Scripture file<input id="scriptureFile" type="file" accept=".txt,.csv,.usfm,.sfm,.usx"></label>
+  <label>Second translation / language (optional)<input id="secondaryScriptureVersion" maxlength="80" placeholder="e.g. Reina-Valera 1960"></label>
+  <label>Second translation text<textarea id="secondaryScriptureText" rows="5" placeholder="Paste the same passage in the second language. Separate matching verses with blank lines."></textarea></label>
+  <label>Or import the second translation file<input id="secondaryScriptureFile" type="file" accept=".txt,.csv,.usfm,.sfm,.usx"></label>
+  <p id="secondaryScriptureStatus" role="status">Optional: use blank lines to align each slide in both languages.</p>
+  <p id="scriptureImportStatus" role="status">Choose a version and passage, then paste or select a file.</p>
+  <button id="addScripture" type="button" class="primary" disabled>Add Scripture to service</button>
+ </section>
+</dialog>
+<dialog id="itemDialog">
+ <form id="itemForm">
+  <div class="eyebrow">SERVICE ITEM</div>
+  <h2 id="dialogTitle">Add to your service</h2>
+  <label>Type<select id="typeInput"><option>Song</option><option>Scripture</option><option>Announcement</option><option>Sermon</option></select></label>
+  <section id="songTools" class="item-library">
+   <h3>Find a song or template</h3>
+   <label>Search saved songs<input id="songSearch" type="search" placeholder="Song title or lyrics"></label>
+   <div id="songResults" class="library-results"></div>
+   <label class="button">Import a song file<input id="songFile" type="file" accept=".txt,.pro,.chopro,.chordpro,.xml,.csv" hidden></label>
+   <button id="openSongFolder" type="button" hidden>Open song folder</button>
+   <a href="https://www.songselect.ccli.com/" target="_blank" rel="noopener noreferrer">Open SongSelect</a>
+   <p id="songStatus" role="status">Search saved songs, import an authorized file, or enter a new song below.</p>
+  </section>
+  <section id="bibleTools" class="item-library" hidden>
+   <h3>Search the KJV Bible</h3>
+   <label>Passage or words<input id="bibleQuery" type="search" placeholder="John 3:16-18 or words"></label>
+   <button id="searchBible" type="button">Search KJV</button>
+   <div id="bibleResults" class="library-results"></div>
+   <p id="bibleStatus" role="status">Select a result to fill this Scripture item.</p>
+  </section>
+  <label>Title<input id="titleInput" required maxlength="100"></label>
+  <label>Slide text<textarea id="textInput" rows="9" placeholder="Enter lyrics or text. Separate slides with a blank line." required></textarea></label>
+  <button id="saveSongTemplate" type="button">Save song to library</button>
+  <div id="translationFields" hidden>
+   <label>Primary translation / version<input id="itemPrimaryVersion" maxlength="80"></label>
+   <label>Second translation / language<input id="itemSecondaryVersion" maxlength="80"></label>
+   <label>Second translation text<textarea id="itemSecondaryText" rows="5" placeholder="Separate matching verses with blank lines."></textarea></label>
+   <p class="subtle">Both translations appear side by side. Leave the second translation blank for a single-language slide.</p>
+  </div>
+  <p class="subtle">Separate slides with a blank line. Use lyrics and Bible translations you have permission to display.</p>
+  <div class="dialog-actions"><button type="button" id="delete">Delete item</button><span></span><button type="button" id="cancel">Cancel</button><button class="primary" type="submit">Save item</button></div>
+ </form>
+</dialog>
+<div id="toast" role="status"></div>
+<script src="slide-template.cjs"></script>
+<script src="content-import.js"></script>
+<script src="bible-search.js"></script>
+<script src="app.js"></script>
+<script src="sync-core.js"></script>
+<script src="sync.js"></script>
+<script src="desktop-ui.js"></script>
+</body>
+</html>
