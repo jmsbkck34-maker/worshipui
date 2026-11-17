@@ -174,3 +174,7 @@ WorshipUI provides the lyrics and Scripture overlay. **OBS Studio** (free, obspr
 OBS streams to one service at a time. To go live on YouTube and Facebook together, use OBS's free "Multiple RTMP outputs" plugin or a relay service such as Restream.
 
 When **Show the CCLI Streaming License number** is on and the number is entered in **Settings → CCLI license registrations**, song slides show it in the corner of the stream, as CCLI requires for streamed lyrics. The overlay is served only to this computer (127.0.0.1) and only while the installed app is running.
+
+### OBS on a different computer
+
+If OBS runs on another computer on the same network, turn on **Screens → Livestream (OBS) → Allow OBS on another computer on this network**. WorshipUI then lists addresses such as `http://192.168.1.20:48095/stream?key=…`. Paste one into the OBS Browser source on the streaming computer. The `key` at the end is a random code: other devices on the network get no access without it. **Make a new key** replaces it, and OBS then needs the new address. The first time the option is on, Windows may ask whether WorshipUI can use the network; allow **Private networks**. The address starting with 192.168… can change if the router gives the computer a new address, while the one using the computer's name stays the same.

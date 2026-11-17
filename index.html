@@ -95,6 +95,12 @@
    <label>Text size<input id="streamFontSize" type="range" min="24" max="120" step="2"></label>
   </div>
   <label class="check-row"><input id="streamCcli" type="checkbox"> Show the CCLI Streaming License number on song slides</label>
+  <label class="check-row"><input id="streamNetwork" type="checkbox"> Allow OBS on another computer on this network</label>
+  <div id="streamNetworkBox" class="stream-network" hidden>
+   <p class="subtle">In OBS on the streaming computer, use one of these addresses. The key at the end keeps other devices on the network out. If Windows asks about WorshipUI and the firewall, allow <strong>Private networks</strong>.</p>
+   <div id="streamNetworkUrls"></div>
+   <button id="newStreamKey" type="button">Make a new key</button>
+  </div>
   <p id="streamStatus" class="subtle" role="status"></p>
  </section>
 </dialog>

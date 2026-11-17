@@ -1059,13 +1059,28 @@ if(mode==='audience'||mode==='stage'){
   let info={error:'The livestream overlay is available in the installed app.'};
   if(window.worshipDesktop?.streamInfo)try{info=await window.worshipDesktop.streamInfo()}catch{}
   $('streamUrl').value=info.url||'';$('copyStreamUrl').disabled=$('previewStream').disabled=!info.url;
+  // OBS on another computer: show this computer's network addresses (with the access key), each with Copy.
+  $('streamNetwork').checked=!!settings.network;$('streamNetwork').disabled=!info.url&&!settings.network;
+  $('streamNetworkBox').hidden=!settings.network;$('streamNetworkUrls').replaceChildren();
+  (info.networkUrls||[]).forEach((address,n)=>{
+   const row=document.createElement('div');row.className='stream-address';
+   const field=document.createElement('input');field.readOnly=true;field.value=address;field.setAttribute('aria-label','Network overlay address');
+   const copy=document.createElement('button');copy.type='button';copy.textContent='Copy address';
+   copy.onclick=async()=>{try{await window.worshipDesktop.copyStreamUrl(n);$('streamStatus').textContent='Address copied. Paste it into the OBS Browser source on the streaming computer.'}catch{field.select()}};
+   row.append(field,copy);$('streamNetworkUrls').append(row);
+  });
   $('streamStatus').textContent=info.url?(settings.ccli&&!ccliSettings.streaming?'Add your CCLI Streaming License number in Settings to show it on song slides.':'Ready for OBS.'):info.error;
  }
- function saveStream(){
-  const settings={version:1,layout:$('streamLayout').value,show:$('streamShow').value,fontSize:Number($('streamFontSize').value),background:$('streamBackground').value,ccli:$('streamCcli').checked};
+ // A random access key for network OBS; letters and digits only.
+ function newStreamKey(){const bytes=crypto.getRandomValues(new Uint8Array(12));return Array.from(bytes,b=>b.toString(36).padStart(2,'0')).join('').slice(0,20)}
+ function saveStream(change={}){
+  const previous=readStream();
+  const settings={version:1,layout:$('streamLayout').value,show:$('streamShow').value,fontSize:Number($('streamFontSize').value),background:$('streamBackground').value,ccli:$('streamCcli').checked,
+   network:$('streamNetwork').checked,networkKey:previous.networkKey||newStreamKey(),...change};
   try{workspaceStorage.setItem(STREAM,JSON.stringify(settings));renderStream()}catch{$('streamStatus').textContent='Could not save the livestream settings on this device.'}
  }
- ['streamLayout','streamShow','streamBackground','streamFontSize','streamCcli'].forEach(id=>{$(id).onchange=saveStream});
+ ['streamLayout','streamShow','streamBackground','streamFontSize','streamCcli','streamNetwork'].forEach(id=>{$(id).onchange=()=>saveStream()});
+ $('newStreamKey').onclick=()=>{if(confirm('Make a new key? OBS on the other computer will need the new address.'))saveStream({networkKey:newStreamKey()})};
  $('copyStreamUrl').onclick=async()=>{try{if(window.worshipDesktop?.copyStreamUrl)await window.worshipDesktop.copyStreamUrl();else await navigator.clipboard.writeText($('streamUrl').value);$('streamStatus').textContent='Address copied. Paste it into the OBS Browser source.'}catch{$('streamUrl').select();$('streamStatus').textContent='Press Ctrl+C to copy the selected address.'}};
  $('previewStream').onclick=()=>{if($('streamUrl').value)window.open($('streamUrl').value,'_blank')};
  $('screenSetup').onclick=()=>{$('screensDialog').showModal();renderScreenSetup();renderStream()};

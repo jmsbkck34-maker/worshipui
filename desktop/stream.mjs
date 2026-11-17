@@ -1,12 +1,20 @@
 // Livestream overlay for OBS: a local page (http://127.0.0.1:<port>/stream) that OBS adds as a Browser source.
 // It shows the live slide as lower-third or full-screen text on a transparent background and updates instantly
-// through Server-Sent Events. Only this computer can connect (bound to 127.0.0.1).
+// through Server-Sent Events. By default only this computer can connect (127.0.0.1). With "network" on, OBS on
+// another computer on the same network can connect too, but only with the access key in the address.
 import http from 'node:http';
+import os from 'node:os';
 
 export const defaultStreamSettings={version:1,layout:'lower',show:'both',fontSize:56,background:'band',ccli:true};
 export function validStreamSettings(value){
  return !!value&&value.version===1&&['lower','full'].includes(value.layout)&&['both','first','second'].includes(value.show)&&
-  Number.isInteger(value.fontSize)&&value.fontSize>=24&&value.fontSize<=120&&['band','transparent'].includes(value.background)&&typeof value.ccli==='boolean';
+  Number.isInteger(value.fontSize)&&value.fontSize>=24&&value.fontSize<=120&&['band','transparent'].includes(value.background)&&typeof value.ccli==='boolean'&&
+  (value.network===undefined||typeof value.network==='boolean')&&(value.networkKey===undefined||typeof value.networkKey==='string'&&/^[a-z0-9]{12,64}$/.test(value.networkKey))&&
+  (!value.network||typeof value.networkKey==='string');
+}
+// This computer's addresses on the local network (IPv4), for the "another computer" overlay link.
+export function networkAddresses(){
+ return Object.values(os.networkInterfaces()).flat().filter(entry=>entry&&entry.family==='IPv4'&&!entry.internal).map(entry=>entry.address);
 }
 
 // What the overlay should show for the live output, the stream settings and the CCLI numbers.
@@ -45,16 +53,20 @@ function show(state){
  license.textContent=state.license;
  if(state.lines.length)fit(state.fontSize*Math.min(window.innerWidth,1920)/1920);
 }
-const events=new EventSource('/stream/events');events.onmessage=event=>show(JSON.parse(event.data));
+const events=new EventSource('/stream/events'+location.search);events.onmessage=event=>show(JSON.parse(event.data));
 </script></body></html>`;
 
-// Serves the overlay on the first free port from 48095 (an uncommon range, so the address OBS uses stays the same). getState() returns the current overlay state.
-export async function createStreamServer(getState,{ports=[48095,48096,48097,48098,48099],font}={}){
- const clients=new Set();
+// Serves the overlay on the first free port from 48095 (an uncommon range, so the address OBS uses stays the same).
+// getState() returns the current overlay state. With networkKey set, the server also accepts other computers on the
+// network, but only requests carrying ?key=<networkKey>; this computer never needs the key.
+export async function createStreamServer(getState,{ports=[48095,48096,48097,48098,48099],font,networkKey=''}={}){
+ const clients=new Set(),network=!!networkKey;
  const server=http.createServer((req,res)=>{
   const url=new URL(req.url,'http://127.0.0.1');
   res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
   if(req.method!=='GET'){res.writeHead(405);res.end();return}
+  const local=['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+  if(!local&&(!network||url.searchParams.get('key')!==networkKey)){res.writeHead(403);res.end();return}
   if(url.pathname==='/stream'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; font-src 'self'"});res.end(page);return}
   if(url.pathname==='/stream/font'&&font){res.writeHead(200,{'Content-Type':'font/ttf'});res.end(font);return}
   if(url.pathname==='/stream/events'){
@@ -65,12 +77,14 @@ export async function createStreamServer(getState,{ports=[48095,48096,48097,4809
  });
  let port=null;
  for(const candidate of ports){
-  try{await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(candidate,'127.0.0.1',()=>{server.off('error',reject);resolve()})});port=server.address().port;break}
+  try{await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(candidate,network?'0.0.0.0':'127.0.0.1',()=>{server.off('error',reject);resolve()})});port=server.address().port;break}
   catch(error){if(error.code!=='EADDRINUSE')throw error}
  }
  if(!port)throw Error('Ports 48095–48099 are busy, so the livestream overlay is off.');
  return {
-  port,url:`http://127.0.0.1:${port}/stream`,
+  port,url:`http://127.0.0.1:${port}/stream`,network,
+  // Addresses for OBS on another computer: this computer's network IPs plus its name, each with the access key.
+  networkUrls:network?[...networkAddresses(),os.hostname()].map(host=>`http://${host}:${port}/stream?key=${networkKey}`):[],
   // Push the latest state to every connected overlay (OBS) after the live slide or settings change.
   update(){const data='data: '+JSON.stringify(getState())+'\n\n';for(const client of clients)client.write(data)},
   close(){for(const client of clients)client.end();server.close()}
