@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {openDeviceStore,sharedOrigin} from './storage.mjs';
 import {createDesktopHost} from './host.mjs';
 import {createStreamServer,streamState} from './stream.mjs';
+import {convertPowerPoint} from './powerpoint.mjs';
 const here=path.dirname(fileURLToPath(import.meta.url)),root=path.dirname(here);
 // Keep the original "Worship UI" data folder in AppData so existing services survive the rename.
 app.setPath('userData',path.join(app.getPath('appData'),'Worship UI'));
@@ -40,6 +41,17 @@ else {
     copyFileSync(source,path.join(mediaDir,file));
     return {kind:['mp4','webm','m4v','mov'].includes(ext)?'video':'image',file,name:path.basename(source).slice(0,120)};
    });
+  });
+  // PowerPoint import (Windows with PowerPoint): each visible slide becomes an image slide in the media folder.
+  ipcMain.handle('wui:import-powerpoint',async event=>{
+   if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');
+   const choice=await dialog.showOpenDialog(main,{title:'Import a PowerPoint presentation',properties:['openFile'],filters:[{name:'PowerPoint',extensions:['pptx','ppt','ppsx','pps']}]});
+   if(choice.canceled||!choice.filePaths[0])return null;
+   const source=choice.filePaths[0],result=await convertPowerPoint(source);
+   try{
+    const media=result.files.slice(0,200).map((file,n)=>{const name=randomUUID().replace(/-/g,'')+'.png';copyFileSync(file,path.join(mediaDir,name));return {kind:'image',file:name,name:'Slide '+(n+1)}});
+    return {title:path.basename(source).replace(/\.[^.]+$/,'').slice(0,100),media,animated:result.animated};
+   }finally{rmSync(result.folder,{recursive:true,force:true})}
   });
   // Media used by a setlist file travel in a "WorshipUI media" folder next to it.
   const mediaInSetlist=text=>{try{return [...new Set((JSON.parse(text).service?.items||[]).flatMap(item=>Array.isArray(item.media)?item.media.map(entry=>entry?.file):[]).filter(mediaName))]}catch{return []}};

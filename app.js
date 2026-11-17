@@ -825,7 +825,7 @@ if(mode==='audience'||mode==='stage'){
  let mediaDraft=[];
  function renderMediaDraft(){
   const list=$('mediaList');list.replaceChildren();
-  $('addMedia').disabled=!window.worshipDesktop?.importMedia;
+  $('addMedia').disabled=!window.worshipDesktop?.importMedia;$('importPowerPoint').hidden=!window.worshipDesktop?.importPowerPoint;
   if(!window.worshipDesktop?.importMedia)$('mediaStatus').textContent='Images and videos can be added in the installed app.';
   mediaDraft.forEach((entry,n)=>{
    const row=document.createElement('div');row.className='media-row';
@@ -837,6 +837,17 @@ if(mode==='audience'||mode==='stage'){
  $('addMedia').onclick=async()=>{
   try{const added=await window.worshipDesktop.importMedia();mediaDraft=[...mediaDraft,...added].slice(0,200);renderMediaDraft();if(added.length)$('mediaStatus').textContent=added.length+' added. Save the item to use them.'}
   catch(error){$('mediaStatus').textContent=String(error.message||'').replace(/^Error invoking remote method '[^']+': (Error: )?/,'')||'Could not add those files.'}
+ };
+ // PowerPoint: each visible slide is added as an image; the deck name becomes the title if none is set.
+ $('importPowerPoint').onclick=async()=>{
+  $('mediaStatus').textContent='Opening the presentation in PowerPoint…';$('importPowerPoint').disabled=true;
+  try{
+   const deck=await window.worshipDesktop.importPowerPoint();
+   if(!deck){$('mediaStatus').textContent='';return}
+   mediaDraft=[...mediaDraft,...deck.media].slice(0,200);if(!$('titleInput').value.trim())$('titleInput').value=deck.title;renderMediaDraft();
+   $('mediaStatus').textContent=deck.media.length+' slides imported from PowerPoint.'+(deck.animated?' '+deck.animated+' had animations, which pictures cannot keep — check those slides.':'')+' Save the item to use them.';
+  }catch(error){$('mediaStatus').textContent=String(error.message||'').replace(/^Error invoking remote method '[^']+': (Error: )?/,'')||'Could not import that presentation.'}
+  finally{$('importPowerPoint').disabled=false}
  };
  $('countdownMode').onchange=renderCountdownFields;$('countdownEnd').onchange=renderCountdownFields;
  function fillCountdownFields(countdown){

@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('worshipDesktop',{
  fetchBible:url=>ipcRenderer.invoke('wui:fetch-bible',url),
  streamInfo:()=>ipcRenderer.invoke('wui:stream-info'),
  importMedia:()=>ipcRenderer.invoke('wui:import-media'),
+ ...(process.platform==='win32'?{importPowerPoint:()=>ipcRenderer.invoke('wui:import-powerpoint')}:{}),
  setlistFolder:()=>ipcRenderer.invoke('wui:setlist-folder'),
  chooseSetlistFolder:()=>ipcRenderer.invoke('wui:choose-setlist-folder'),
  listSetlistFiles:()=>ipcRenderer.invoke('wui:list-setlist-files'),

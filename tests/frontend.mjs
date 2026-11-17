@@ -415,6 +415,18 @@ check(licensedItem.primaryVersion,'NIV');check(licensedItem.slides[0].startsWith
  let mediaLive=JSON.parse(mediaClient.storage.get(liveKey));check([mediaLive.media,mediaLive.paused],[chosenMedia[1],false]);
  check(mediaClient.node('videoToggle').hidden,false);mediaClient.node('videoToggle').onclick();
  mediaLive=JSON.parse(mediaClient.storage.get(liveKey));check(mediaLive.paused,true);check(mediaClient.node('videoToggle').textContent,'Play video');
+ // PowerPoint import: slides arrive as images, the deck name becomes the title, and animations are mentioned.
+ const deckSlides=[{kind:'image',file:'d'.repeat(32)+'.png',name:'Slide 1'},{kind:'image',file:'e'.repeat(32)+'.png',name:'Slide 2'}];
+ const ppt=await client('operator',false,null,{importMedia:async()=>[],importPowerPoint:async()=>({title:'Announcements',media:deckSlides,animated:1})});
+ ppt.node('add').onclick();ppt.node('typeInput').value='Media';await ppt.node('typeInput').onchange();
+ check(ppt.node('importPowerPoint').hidden,false);ppt.node('titleInput').value='';
+ await ppt.node('importPowerPoint').onclick();
+ check(ppt.node('titleInput').value,'Announcements');check(ppt.node('mediaStatus').textContent.includes('1 had animations'),true);
+ ppt.node('itemForm').onsubmit({preventDefault(){}});
+ check(ppt.context.worshipWorkspace.getService().items.at(-1).media,deckSlides);
+ // Without PowerPoint support (Mac, browser) the button is hidden.
+ const noPpt=await client('operator',false,null,{importMedia:async()=>[]});
+ noPpt.node('add').onclick();noPpt.node('typeInput').value='Media';await noPpt.node('typeInput').onchange();check(noPpt.node('importPowerPoint').hidden,true);
  const remoteEditor=await client('editor',false);remoteEditor.node('slides').children[1].onclick();remoteEditor.node('slides').children[1].onclick();check(remoteEditor.storage.has(liveKey),false);
  return checks;
 }
