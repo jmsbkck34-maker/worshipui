@@ -427,6 +427,16 @@ check(licensedItem.primaryVersion,'NIV');check(licensedItem.slides[0].startsWith
  // Without PowerPoint support (Mac, browser) the button is hidden.
  const noPpt=await client('operator',false,null,{importMedia:async()=>[]});
  noPpt.node('add').onclick();noPpt.node('typeInput').value='Media';await noPpt.node('typeInput').onchange();check(noPpt.node('importPowerPoint').hidden,true);
+ // Songs with lyrics in the second language: one block per slide, refused when the counts differ.
+ const bilingual=await client('operator',false);
+ bilingual.node('add').onclick();bilingual.node('typeInput').value='Song';await bilingual.node('typeInput').onchange?.();
+ check(bilingual.node('songLanguageFields').hidden,false);
+ bilingual.node('titleInput').value='Amazing Grace';bilingual.node('textInput').value='Amazing grace\n\nI once was lost';
+ bilingual.node('songSecondText').value='Sublime gracia';bilingual.node('itemForm').onsubmit({preventDefault(){}});
+ check(bilingual.context.worshipWorkspace.getService().items.some(item=>item.title==='Amazing Grace'),false);
+ bilingual.node('songSecondText').value='Sublime gracia\n\nPerdido anduve';bilingual.node('itemForm').onsubmit({preventDefault(){}});
+ const bilingualSong=bilingual.context.worshipWorkspace.getService().items.find(item=>item.title==='Amazing Grace');
+ check(bilingualSong.secondarySlides,['Sublime gracia','Perdido anduve']);check(bilingualSong.primaryVersion,undefined);check(typeof bilingualSong.secondaryVersion,'string');
  const remoteEditor=await client('editor',false);remoteEditor.node('slides').children[1].onclick();remoteEditor.node('slides').children[1].onclick();check(remoteEditor.storage.has(liveKey),false);
  return checks;
 }

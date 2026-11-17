@@ -11,7 +11,8 @@ function validTranslations(item){
  if(item.secondaryVerseSlides!==undefined&&!(item.verseSlides&&Array.isArray(item.secondarySlides)&&verseList(item.secondaryVerseSlides,item.verseSlides.length)))return false;
  if(item.primaryVersion!==undefined&&(item.type!=='Scripture'||typeof item.primaryVersion!=='string'||item.primaryVersion.length>80))return false;
  if(item.secondarySlides===undefined&&item.secondaryVersion===undefined)return true;
- return item.type==='Scripture'&&typeof item.primaryVersion==='string'&&item.primaryVersion.length>0&&item.primaryVersion.length<=80&&
+ // Scripture names both translations; a song only names its second language.
+ return (item.type==='Scripture'&&typeof item.primaryVersion==='string'&&item.primaryVersion.length>0&&item.primaryVersion.length<=80||item.type==='Song'&&item.primaryVersion===undefined)&&
   typeof item.secondaryVersion==='string'&&item.secondaryVersion.trim().length>0&&item.secondaryVersion.length<=80&&
   Array.isArray(item.secondarySlides)&&item.secondarySlides.length===item.slides.length&&item.secondarySlides.length<=200&&item.secondarySlides.every(text=>typeof text==='string'&&text.length>0&&text.length<=20000);
 }
@@ -321,7 +322,7 @@ if(mode==='audience'||mode==='stage'){
   ['textX','textY','textWidth','resetTextPosition'].forEach(id=>$(id).disabled=!item);
   if(!item)return;
   const slide=Math.min(index,item.slides.length-1);
-  paint($('templatePreview'),item.slides[slide]||'',item.theme,false,item.template,{fitText:item.fitText,secondaryText:item.secondarySlides?.[slide]||'',primaryVersion:item.primaryVersion||'',secondaryVersion:item.secondaryVersion||''});
+  paint($('templatePreview'),item.slides[slide]||'',item.theme,false,item.template,{fitText:item.fitText,secondaryText:item.secondarySlides?.[slide]||'',primaryVersion:item.type==='Scripture'?item.primaryVersion||'':'',secondaryVersion:item.type==='Scripture'?item.secondaryVersion||'':''});
   $('templatePreview').className+=' template-preview';
  }
  // Live preview while dragging or sliding; the template is saved when the gesture ends.
@@ -425,7 +426,7 @@ if(mode==='audience'||mode==='stage'){
  };
  let livePosition=null;
  function broadcast(){if(window.worshipWorkspace?.role==='editor')return;try{workspaceStorage.setItem(LIVE,JSON.stringify(output))}catch{toast('Cannot connect output windows: browser storage is unavailable.')}renderOutput();if(!mode&&window.worshipWorkspace)window.worshipWorkspace.setRole(window.worshipWorkspace.role)}
- function take(preserveBlanking=false){if(window.worshipWorkspace?.role==='editor')return;const i=current();if(!i)return;livePosition={id:i.id,index};output={text:i.slides[index],next:i.slides[index+1]||'',secondaryText:i.secondarySlides?.[index]||'',nextSecondaryText:i.secondarySlides?.[index+1]||'',primaryVersion:i.primaryVersion||'',secondaryVersion:i.secondaryVersion||'',fitText:!!i.fitText,ccliFooter:i.type==='Song'&&ccliSettings.churchCopyright?'CCLI License #'+ccliSettings.churchCopyright:'',theme:i.theme,template:SlideTemplate.normalize(i.template),screen:i.slideScreens?.[index]||'',type:i.type,...(i.media?.[index]?{media:i.media[index],paused:false}:{}),...(i.type==='Countdown'?{countdown:{target:SlideTemplate.countdownTarget(i.countdown,Date.now()),message:i.countdown.message,end:i.countdown.end,endMessage:i.countdown.endMessage}}:{}),black:preserveBlanking&&output.black,clear:preserveBlanking&&output.clear};broadcast()}
+ function take(preserveBlanking=false){if(window.worshipWorkspace?.role==='editor')return;const i=current();if(!i)return;livePosition={id:i.id,index};output={text:i.slides[index],next:i.slides[index+1]||'',secondaryText:i.secondarySlides?.[index]||'',nextSecondaryText:i.secondarySlides?.[index+1]||'',primaryVersion:i.type==='Scripture'?i.primaryVersion||'':'',secondaryVersion:i.type==='Scripture'?i.secondaryVersion||'':'',fitText:!!i.fitText,ccliFooter:i.type==='Song'&&ccliSettings.churchCopyright?'CCLI License #'+ccliSettings.churchCopyright:'',theme:i.theme,template:SlideTemplate.normalize(i.template),screen:i.slideScreens?.[index]||'',type:i.type,...(i.media?.[index]?{media:i.media[index],paused:false}:{}),...(i.type==='Countdown'?{countdown:{target:SlideTemplate.countdownTarget(i.countdown,Date.now()),message:i.countdown.message,end:i.countdown.end,endMessage:i.countdown.endMessage}}:{}),black:preserveBlanking&&output.black,clear:preserveBlanking&&output.clear};broadcast()}
  function move(dir){const i=current();if(!i)return false;if(index+dir>=0&&index+dir<i.slides.length){index+=dir}else{const n=service.items.indexOf(i)+dir;if(n<0||n>=service.items.length)return false;selected=service.items[n].id;index=dir>0?0:service.items[n].slides.length-1}render();return true}
  function advanceLive(){
   if(window.worshipWorkspace?.role==='editor')return;
@@ -450,7 +451,7 @@ if(mode==='audience'||mode==='stage'){
   workspaceStorage.setItem(SONGS,JSON.stringify(next));songs=next;
  }
  function loadSong(song){
-  $('titleInput').value=song.title;$('textInput').value=song.slides.join('\n\n');
+  $('titleInput').value=song.title;$('textInput').value=song.slides.join('\n\n');$('songSecondText').value=song.secondarySlides?.join('\n\n')||'';
   chosenSongStyle={theme:song.theme,...(song.template?{template:structuredClone(song.template)}:{}),...(song.sectionLabels?{sectionLabels:structuredClone(song.sectionLabels)}:{})};chosenSongSlides=song.slides.slice();
  }
  function appendSongResult(song){
@@ -462,7 +463,7 @@ if(mode==='audience'||mode==='stage'){
   const term=$('songSearch').value.trim().toLowerCase();$('songResults').replaceChildren();
   if(songError){$('songStatus').textContent=songError+' The saved library was preserved.';return}
   if(!term){$('songStatus').textContent='Search by title or lyrics to find saved songs.';return}
-  const matches=songs.songs.filter(song=>song.title.toLowerCase().includes(term)||song.slides.some(text=>text.toLowerCase().includes(term))).slice(0,50);
+  const matches=songs.songs.filter(song=>song.title.toLowerCase().includes(term)||song.slides.some(text=>text.toLowerCase().includes(term))||song.secondarySlides?.some(text=>text.toLowerCase().includes(term))).slice(0,50);
   matches.forEach(appendSongResult);
   $('songStatus').textContent=matches.length?matches.length+' saved song'+(matches.length===1?'':'s')+' shown.':'No saved songs match. Import a file or save a song below.';
  }
@@ -474,7 +475,9 @@ if(mode==='audience'||mode==='stage'){
    const labels=chosenSongStyle?remapSectionLabels(chosenSongSlides,chosenSongStyle.sectionLabels,slides):editing&&current()?.type==='Song'?remapSectionLabels(current().slides,current().sectionLabels,slides):undefined;
    const originalLabels=chosenSongStyle?.sectionLabels||(editing&&current()?.type==='Song'?current().sectionLabels:undefined);
    if(!confirmSectionLoss(originalLabels,labels))return;
-   const song={id:crypto.randomUUID(),title,type:'Song',slides,theme:style.theme,...(style.template?{template:style.template}:{}),...(labels?{sectionLabels:labels}:{})};
+   const second=$('songSecondText').value.trim().split(/\n\s*\n/).filter(Boolean);
+   if(second.length&&second.length!==slides.length)throw Error('The second-language lyrics need one block per slide: '+slides.length+' slides, '+second.length+' blocks.');
+   const song={id:crypto.randomUUID(),title,type:'Song',slides,...(second.length?{secondarySlides:second,secondaryVersion:secondLanguage().name}:{}),theme:style.theme,...(style.template?{template:style.template}:{}),...(labels?{sectionLabels:labels}:{})};
    if(!title||!slides.length||slides.some(text=>text.length>20000))throw Error('Enter a song title and slide text first.');
    saveSongs({version:1,songs:[...songs.songs,song]});renderSongs();$('songStatus').textContent='Song saved to this device’s library.';
   }catch(error){$('songStatus').textContent=error.message||'Could not save this song.'}
@@ -811,9 +814,9 @@ if(mode==='audience'||mode==='stage'){
     }
   }catch(error){$('bibleStatus').textContent=error.message||'Could not add that passage.'}
  };
- function openEditor(isEdit){editing=isEdit;chosenSongStyle=null;chosenSongSlides=null;chosenScriptureFit=null;chosenVerseSlides=null;chosenSecondVerseSlides=null;addSecondLanguage=false;captured=null;$('fillSecondStatus').textContent='';const i=isEdit?current():null;$('dialogTitle').textContent=isEdit?'Edit service item':'Add to your service';$('titleInput').value=i?.title||'';$('typeInput').value=i?.type||'Song';$('textInput').value=i?.slides.join('\n\n')||'';$('itemPrimaryVersion').value=i?.primaryVersion||'';$('itemSecondaryVersion').value=i?.secondaryVersion||'';$('itemSecondaryText').value=i?.secondarySlides?.join('\n\n')||'';$('songSearch').value='';$('delete').hidden=!isEdit;fillCountdownFields(i?.type==='Countdown'?i.countdown:null);mediaDraft=i?.type==='Media'?structuredClone(i.media):[];updateItemTranslationFields();renderSongs();$('itemDialog').showModal()}
+ function openEditor(isEdit){editing=isEdit;chosenSongStyle=null;chosenSongSlides=null;chosenScriptureFit=null;chosenVerseSlides=null;chosenSecondVerseSlides=null;addSecondLanguage=false;captured=null;$('fillSecondStatus').textContent='';const i=isEdit?current():null;$('dialogTitle').textContent=isEdit?'Edit service item':'Add to your service';$('titleInput').value=i?.title||'';$('typeInput').value=i?.type||'Song';$('textInput').value=i?.slides.join('\n\n')||'';$('itemPrimaryVersion').value=i?.primaryVersion||'';$('itemSecondaryVersion').value=i?.secondaryVersion||'';$('itemSecondaryText').value=i?.secondarySlides?.join('\n\n')||'';$('songSecondText').value=i?.type==='Song'?i.secondarySlides?.join('\n\n')||'':'';$('songSearch').value='';$('delete').hidden=!isEdit;fillCountdownFields(i?.type==='Countdown'?i.countdown:null);mediaDraft=i?.type==='Media'?structuredClone(i.media):[];updateItemTranslationFields();renderSongs();$('itemDialog').showModal()}
  $('add').onclick=()=>openEditor(false);$('edit').onclick=()=>openEditor(true);$('cancel').onclick=()=>$('itemDialog').close();
- function updateItemTranslationFields(){const type=$('typeInput').value;$('countdownFields').hidden=type!=='Countdown';$('mediaFields').hidden=type!=='Media';$('textInputRow').hidden=type==='Countdown'||type==='Media';$('textInput').required=type!=='Countdown'&&type!=='Media';renderMediaDraft();renderCountdownFields();$('translationFields').hidden=type!=='Scripture';$('bibleTools').hidden=type!=='Scripture';$('songTools').hidden=type!=='Song';$('saveSongTemplate').hidden=type!=='Song';$('titleInput').required=type!=='Scripture';$('titleLabel').textContent=type==='Scripture'?'Title (optional)':'Title';if(type==='Scripture')return prepareBible()}
+ function updateItemTranslationFields(){const type=$('typeInput').value;$('countdownFields').hidden=type!=='Countdown';$('mediaFields').hidden=type!=='Media';$('textInputRow').hidden=type==='Countdown'||type==='Media';$('textInput').required=type!=='Countdown'&&type!=='Media';renderMediaDraft();renderCountdownFields();$('translationFields').hidden=type!=='Scripture';$('bibleTools').hidden=type!=='Scripture';$('songTools').hidden=type!=='Song';$('saveSongTemplate').hidden=type!=='Song';$('songLanguageFields').hidden=type!=='Song';$('titleInput').required=type!=='Scripture';$('titleLabel').textContent=type==='Scripture'?'Title (optional)':'Title';if(type==='Scripture')return prepareBible()}
  $('typeInput').onchange=updateItemTranslationFields;
  // Countdown editor: a length of time or a clock time, text above the timer, and what happens at zero.
  function renderCountdownFields(){
@@ -881,6 +884,14 @@ if(mode==='audience'||mode==='stage'){
    const labels=source&&remapSectionLabels(source.slides,source.sectionLabels,slides);
    if(source&&!confirmSectionLoss(source.sectionLabels,labels))return;
    if(labels)item.sectionLabels=labels;
+   // Second-language lyrics: one blank-line block per slide, in the same order.
+   const second=$('songSecondText').value.trim();
+   if(second){
+    const blocks=second.split(/\n\s*\n/).filter(Boolean);
+    if(blocks.length!==slides.length){toast('The second-language lyrics need one block per slide: '+slides.length+' slides, '+blocks.length+' blocks.');return}
+    if(blocks.some(text=>text.length>20000)){toast('Keep each slide under 20,000 characters.');return}
+    item.secondarySlides=blocks;item.secondaryVersion=secondLanguage().name;
+   }
   }
   if(type==='Scripture'){
    if(chosenScriptureFit===true||(chosenScriptureFit===null&&editing&&current()?.type==='Scripture'&&current().fitText))item.fitText=true;

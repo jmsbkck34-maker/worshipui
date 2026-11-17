@@ -21,7 +21,8 @@ function validTranslations(item) {
   if (item.secondaryVerseSlides !== undefined && !(item.verseSlides && Array.isArray(item.secondarySlides) && verseList(item.secondaryVerseSlides, item.verseSlides.length))) return false;
   if (item.primaryVersion !== undefined && (item.type !== 'Scripture' || typeof item.primaryVersion !== 'string' || item.primaryVersion.length > 80)) return false;
   if (item.secondarySlides === undefined && item.secondaryVersion === undefined) return true;
-  return item.type === 'Scripture' && typeof item.primaryVersion === 'string' && item.primaryVersion.length > 0 && item.primaryVersion.length <= 80 &&
+  return (item.type === 'Scripture' && typeof item.primaryVersion === 'string' && item.primaryVersion.length > 0 && item.primaryVersion.length <= 80 ||
+    item.type === 'Song' && item.primaryVersion === undefined) &&
     typeof item.secondaryVersion === 'string' && item.secondaryVersion.trim().length > 0 && item.secondaryVersion.length <= 80 &&
     Array.isArray(item.secondarySlides) && item.secondarySlides.length === item.slides.length && item.secondarySlides.length <= 200 &&
     item.secondarySlides.every(text => typeof text === 'string' && text.length > 0 && text.length <= 20000);

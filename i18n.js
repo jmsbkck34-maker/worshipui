@@ -241,6 +241,9 @@
   'Import PowerPoint':'Importar PowerPoint','Opening the presentation in PowerPoint…':'Abriendo la presentación en PowerPoint…','Could not import that presentation.':'No se pudo importar esa presentación.',
   'PowerPoint is not installed on this computer. In PowerPoint or Google Slides, save the slides as pictures and add them with Add images or videos.':'PowerPoint no está instalado en este equipo. En PowerPoint o Google Slides, guarda las diapositivas como imágenes y agrégalas con Agregar imágenes o videos.',
   'PowerPoint could not open that file. Check that it opens in PowerPoint, then try again.':'PowerPoint no pudo abrir ese archivo. Revisa que abra en PowerPoint e inténtalo de nuevo.',
+  'Lyrics in the second language (optional)':'Letra en el segundo idioma (opcional)','Paste the translated lyrics in the same order. Separate slides with a blank line.':'Pega la letra traducida en el mismo orden. Separa las diapositivas con una línea en blanco.',
+  'Each block goes with the slide in the same place above. Screens set to the second language show these lyrics; screens set to both show them side by side.':'Cada bloque va con la diapositiva en el mismo lugar de arriba. Las pantallas en el segundo idioma muestran esta letra; las pantallas con ambos idiomas la muestran lado a lado.',
+  'Keep each slide under 20,000 characters.':'Mantén cada diapositiva por debajo de 20.000 caracteres.',
   'Images and video':'Imágenes y video','Images & video':'Imágenes y video','Media':'Imágenes y video','Add images or videos':'Agregar imágenes o videos',
   'Each file becomes a slide. Videos play with sound on the audience screen.':'Cada archivo se convierte en una diapositiva. Los videos suenan en la pantalla de audiencia.',
   'Pause video':'Pausar video','Play video':'Reproducir video','Images and videos can be added in the installed app.':'Las imágenes y los videos se agregan en la app instalada.',
@@ -313,7 +316,8 @@
  patterns.push([/^(\d+) slides? · (.+) · (\S+)$/,(m,n,reference,version)=>n+(n==='1'?' diapositiva':' diapositivas')+' · '+reference+' · '+version],[/^\+ (\d+) more$/,'+ $1 más']);
  patterns.push([/^Display connected: Display (\d+) · (\S+)\. Open Screens to assign it\.$/,'Monitor conectado: monitor $1 · $2. Abre Pantallas para asignarlo.'],
   [/^Display (\d+) shows$/,'El monitor $1 muestra'],[/^(\d+×\d+) · main$/,'$1 · principal']);
- patterns.push([/^Setlist saved: (.+)$/,'Servicio guardado: $1'],[/^Opened setlist (.+) from file$/,(m,date)=>'Servicio '+(date==='the undated service'?'sin fecha':date)+' abierto desde archivo'],
+ patterns.push([/^The second-language lyrics need one block per slide: (\d+) slides, (\d+) blocks\.$/,'La letra en el segundo idioma necesita un bloque por diapositiva: $1 diapositivas, $2 bloques.']);
+patterns.push([/^Setlist saved: (.+)$/,'Servicio guardado: $1'],[/^Opened setlist (.+) from file$/,(m,date)=>'Servicio '+(date==='the undated service'?'sin fecha':date)+' abierto desde archivo'],
   [/^Folder: (.+)$/,'Carpeta: $1'],
   [/^Replace your setlist for (.+) with the one from the file\? A recovery copy of yours is kept\.$/,(m,date)=>'¿Reemplazar tu servicio del '+(date==='the undated service'?'servicio sin fecha':date)+' con el del archivo? Se guarda una copia de recuperación del tuyo.']);
  patterns.push([/^Delete setlist (\S+)$/,'Eliminar servicio $1'],[/^Setlist (\S+) deleted from this computer$/,'Servicio $1 eliminado de este equipo'],
