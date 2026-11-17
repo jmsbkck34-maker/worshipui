@@ -1,6 +1,6 @@
 # WorshipUI status — 2026-11-16
 
-Branch: `work/setlist-history-20261116` (version 0.3.3). Automated tests: 27 passing (`npm test`).
+Branch: `work/setlist-history-20261116` (version 0.3.4). Automated tests: 27 passing (`npm test`).
 
 ## Working in the demo
 
