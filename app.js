@@ -26,7 +26,7 @@ function readBranding(){
  const record=read(BRANDING,null);
  return SlideTemplate.validBrandingRecord(record)?record:{version:1,branding:{...SlideTemplate.emptyBranding},baseRevision:0,baseBranding:null};
 }
-function valid(s){return s&&typeof s.title==='string'&&s.title.length<=100&&Array.isArray(s.items)&&s.items.length<=200&&s.items.every(i=>i&&typeof i.id==='string'&&typeof i.title==='string'&&i.title.length<=100&&['Song','Scripture','Announcement','Sermon'].includes(i.type)&&themes.includes(i.theme)&&SlideTemplate.validTemplate(i.template)&&Array.isArray(i.slides)&&i.slides.length>0&&i.slides.length<=200&&i.slides.every(t=>typeof t==='string'&&t.length<=20000)&&validTranslations(i)&&(i.sectionLabels===undefined||i.type==='Song'&&Array.isArray(i.sectionLabels)&&i.sectionLabels.length===i.slides.length&&i.sectionLabels.every(label=>typeof label==='string'&&label.length<=50))&&validSlideScreens(i))&&new Set(s.items.map(i=>i.id)).size===s.items.length}
+function valid(s){return s&&typeof s.title==='string'&&s.title.length<=100&&Array.isArray(s.items)&&s.items.length<=200&&s.items.every(i=>i&&typeof i.id==='string'&&typeof i.title==='string'&&i.title.length<=100&&['Song','Scripture','Announcement','Sermon','Countdown'].includes(i.type)&&(i.type==='Countdown'?SlideTemplate.validCountdown(i.countdown):i.countdown===undefined)&&themes.includes(i.theme)&&SlideTemplate.validTemplate(i.template)&&Array.isArray(i.slides)&&i.slides.length>0&&i.slides.length<=200&&i.slides.every(t=>typeof t==='string'&&t.length<=20000)&&validTranslations(i)&&(i.sectionLabels===undefined||i.type==='Song'&&Array.isArray(i.sectionLabels)&&i.sectionLabels.length===i.slides.length&&i.sectionLabels.every(label=>typeof label==='string'&&label.length<=50))&&validSlideScreens(i))&&new Set(s.items.map(i=>i.id)).size===s.items.length}
 function validDate(value){if(!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value))return false;const date=new Date(value+'T00:00:00Z');return Number.isFinite(date.getTime())&&date.toISOString().slice(0,10)===value}
 function validLibrary(value){
  return value&&value.version===1&&typeof value.active==='string'&&value.entries&&typeof value.entries==='object'&&!Array.isArray(value.entries)&&Object.hasOwn(value.entries,value.active)&&
@@ -43,7 +43,7 @@ function storeService(next){
 }
 let selected=service.items[0]?.id,index=0,editing=false,output=read(LIVE,{text:'',next:'',theme:'midnight',black:false,clear:false});
 const mode=new URLSearchParams(location.search).get('view');
-function safeOutput(o){const optionalText=value=>value===undefined||typeof value==='string'&&value.length<=20000;return o&&typeof o.text==='string'&&typeof o.next==='string'&&themes.includes(o.theme)&&typeof o.black==='boolean'&&typeof o.clear==='boolean'&&(o.fitText===undefined||typeof o.fitText==='boolean')&&SlideTemplate.validTemplate(o.template)&&optionalText(o.secondaryText)&&optionalText(o.nextSecondaryText)&&optionalText(o.primaryVersion)&&optionalText(o.secondaryVersion)&&optionalText(o.ccliFooter)&&(o.screen===undefined||SCREEN_TARGETS.includes(o.screen))&&(o.type===undefined||['Song','Scripture','Announcement','Sermon'].includes(o.type))}
+function safeOutput(o){const optionalText=value=>value===undefined||typeof value==='string'&&value.length<=20000;return o&&typeof o.text==='string'&&typeof o.next==='string'&&themes.includes(o.theme)&&typeof o.black==='boolean'&&typeof o.clear==='boolean'&&(o.fitText===undefined||typeof o.fitText==='boolean')&&SlideTemplate.validTemplate(o.template)&&optionalText(o.secondaryText)&&optionalText(o.nextSecondaryText)&&optionalText(o.primaryVersion)&&optionalText(o.secondaryVersion)&&optionalText(o.ccliFooter)&&(o.screen===undefined||SCREEN_TARGETS.includes(o.screen))&&(o.type===undefined||['Song','Scripture','Announcement','Sermon','Countdown'].includes(o.type))&&(o.countdown===undefined||SlideTemplate.validLiveCountdown(o.countdown))}
 if(!safeOutput(output))output={text:'',next:'',theme:'midnight',black:false,clear:false};
 let ccliSettings={...emptyCcliSettings},ccliSettingsError='';
 try{
@@ -138,7 +138,8 @@ const screenNumber=mode==='audience'?(new URLSearchParams(location.search).get('
 let screenContent=!output.screen||output.screen===screenNumber?output:{...output,text:'',secondaryText:''};
 function renderOutput(){
  if(mode==='audience'&&(!output.screen||output.screen===screenNumber))screenContent=output;
- const shown=mode==='audience'?languageView(screenContent,readScreens().screens[Number(screenNumber)-1].show):output;
+ let shown=mode==='audience'?languageView(screenContent,readScreens().screens[Number(screenNumber)-1].show):output;
+ if(shown.countdown)shown={...shown,text:SlideTemplate.countdownText(shown.countdown,Date.now()),secondaryText:''};
  const options={secondaryText:shown.secondaryText||'',primaryVersion:shown.primaryVersion||'',secondaryVersion:shown.secondaryVersion||'',ccliFooter:shown.ccliFooter||'',fitText:!!shown.fitText};
  if(output.black){const branding=readBranding().branding;if(branding.showOnBlackout&&branding.logo)options.blackoutLogo=branding.logo}
  if(mode==='audience'){paint($('outputText'),output.clear?'':shown.text,shown.theme,output.black,shown.template,output.clear?{}:options)}
@@ -146,14 +147,24 @@ function renderOutput(){
   $('current').className='stage-slide';$('upNext').className='stage-slide stage-next';
   const template=SlideTemplate.normalize(output.template);
   ['current','upNext'].forEach(id=>{$(id).style.setProperty('--slide-font-size',String(template.fontSize));$(id).style.fontFamily='"'+template.font+'", "Inter", sans-serif'});
-  slideContent($('current'),output.black||output.clear?'':output.text||'Waiting for the first slide',output.black||output.clear?{}:options);
+  slideContent($('current'),output.black||output.clear?'':shown.text||'Waiting for the first slide',output.black||output.clear?{}:options);
   slideContent($('upNext'),output.next||'End of item',{secondaryText:output.nextSecondaryText||'',primaryVersion:output.primaryVersion||'',secondaryVersion:output.secondaryVersion||''});
   $('stageState').textContent=output.black?'AUDIENCE BLACKED OUT':output.clear?'AUDIENCE LYRICS CLEARED':'CURRENT SLIDE';
  }else{
-  paint($('live'),output.clear?'':output.text,output.theme,output.black,output.template,output.clear?{}:options);
+  paint($('live'),output.clear?'':shown.text,output.theme,output.black,output.template,output.clear?{}:options);
   $('liveStatus').textContent=output.black?'BLACKOUT':output.clear?'TEXT CLEARED':output.text?'ON SCREEN':'READY';$('blackout').setAttribute('aria-pressed',String(output.black));
  }
 }
+// A running countdown redraws every quarter second. In the main window, "Go to the next item" advances once at zero.
+let countdownDone=0;
+function countdownTick(){
+ if(output.countdown&&!output.black){
+  renderOutput();
+  if(!mode&&output.countdown.end==='next'&&Date.now()>=output.countdown.target&&countdownDone!==output.countdown.target){countdownDone=output.countdown.target;window.worshipWorkspace?.advanceLive?.()}
+ }
+ setTimeout(countdownTick,250);
+}
+setTimeout(countdownTick,250);
 if(mode==='audience'||mode==='stage'){
  document.body.className=mode==='audience'?'output-mode':'stage-mode';document.body.replaceChildren();
  const root=document.createElement('div');root.innerHTML=mode==='audience'?'<div id="outputText"></div><button class="fullscreen">Enter fullscreen</button>':'<h2 id="stageState">CURRENT SLIDE</h2><div id="current"></div><h2>UP NEXT</h2><div id="upNext"></div><button class="fullscreen">Enter fullscreen</button>';document.body.append(root);document.querySelector('.fullscreen').onclick=()=>document.documentElement.requestFullscreen().catch(()=>{});renderOutput();
@@ -401,7 +412,7 @@ if(mode==='audience'||mode==='stage'){
  };
  let livePosition=null;
  function broadcast(){if(window.worshipWorkspace?.role==='editor')return;try{workspaceStorage.setItem(LIVE,JSON.stringify(output))}catch{toast('Cannot connect output windows: browser storage is unavailable.')}renderOutput();if(!mode&&window.worshipWorkspace)window.worshipWorkspace.setRole(window.worshipWorkspace.role)}
- function take(preserveBlanking=false){if(window.worshipWorkspace?.role==='editor')return;const i=current();if(!i)return;livePosition={id:i.id,index};output={text:i.slides[index],next:i.slides[index+1]||'',secondaryText:i.secondarySlides?.[index]||'',nextSecondaryText:i.secondarySlides?.[index+1]||'',primaryVersion:i.primaryVersion||'',secondaryVersion:i.secondaryVersion||'',fitText:!!i.fitText,ccliFooter:i.type==='Song'&&ccliSettings.churchCopyright?'CCLI License #'+ccliSettings.churchCopyright:'',theme:i.theme,template:SlideTemplate.normalize(i.template),screen:i.slideScreens?.[index]||'',type:i.type,black:preserveBlanking&&output.black,clear:preserveBlanking&&output.clear};broadcast()}
+ function take(preserveBlanking=false){if(window.worshipWorkspace?.role==='editor')return;const i=current();if(!i)return;livePosition={id:i.id,index};output={text:i.slides[index],next:i.slides[index+1]||'',secondaryText:i.secondarySlides?.[index]||'',nextSecondaryText:i.secondarySlides?.[index+1]||'',primaryVersion:i.primaryVersion||'',secondaryVersion:i.secondaryVersion||'',fitText:!!i.fitText,ccliFooter:i.type==='Song'&&ccliSettings.churchCopyright?'CCLI License #'+ccliSettings.churchCopyright:'',theme:i.theme,template:SlideTemplate.normalize(i.template),screen:i.slideScreens?.[index]||'',type:i.type,...(i.type==='Countdown'?{countdown:{target:SlideTemplate.countdownTarget(i.countdown,Date.now()),message:i.countdown.message,end:i.countdown.end,endMessage:i.countdown.endMessage}}:{}),black:preserveBlanking&&output.black,clear:preserveBlanking&&output.clear};broadcast()}
  function move(dir){const i=current();if(!i)return false;if(index+dir>=0&&index+dir<i.slides.length){index+=dir}else{const n=service.items.indexOf(i)+dir;if(n<0||n>=service.items.length)return false;selected=service.items[n].id;index=dir>0?0:service.items[n].slides.length-1}render();return true}
  function advanceLive(){
   if(window.worshipWorkspace?.role==='editor')return;
@@ -786,15 +797,39 @@ if(mode==='audience'||mode==='stage'){
     }
   }catch(error){$('bibleStatus').textContent=error.message||'Could not add that passage.'}
  };
- function openEditor(isEdit){editing=isEdit;chosenSongStyle=null;chosenSongSlides=null;chosenScriptureFit=null;chosenVerseSlides=null;chosenSecondVerseSlides=null;addSecondLanguage=false;captured=null;$('fillSecondStatus').textContent='';const i=isEdit?current():null;$('dialogTitle').textContent=isEdit?'Edit service item':'Add to your service';$('titleInput').value=i?.title||'';$('typeInput').value=i?.type||'Song';$('textInput').value=i?.slides.join('\n\n')||'';$('itemPrimaryVersion').value=i?.primaryVersion||'';$('itemSecondaryVersion').value=i?.secondaryVersion||'';$('itemSecondaryText').value=i?.secondarySlides?.join('\n\n')||'';$('songSearch').value='';$('delete').hidden=!isEdit;updateItemTranslationFields();renderSongs();$('itemDialog').showModal()}
+ function openEditor(isEdit){editing=isEdit;chosenSongStyle=null;chosenSongSlides=null;chosenScriptureFit=null;chosenVerseSlides=null;chosenSecondVerseSlides=null;addSecondLanguage=false;captured=null;$('fillSecondStatus').textContent='';const i=isEdit?current():null;$('dialogTitle').textContent=isEdit?'Edit service item':'Add to your service';$('titleInput').value=i?.title||'';$('typeInput').value=i?.type||'Song';$('textInput').value=i?.slides.join('\n\n')||'';$('itemPrimaryVersion').value=i?.primaryVersion||'';$('itemSecondaryVersion').value=i?.secondaryVersion||'';$('itemSecondaryText').value=i?.secondarySlides?.join('\n\n')||'';$('songSearch').value='';$('delete').hidden=!isEdit;fillCountdownFields(i?.type==='Countdown'?i.countdown:null);updateItemTranslationFields();renderSongs();$('itemDialog').showModal()}
  $('add').onclick=()=>openEditor(false);$('edit').onclick=()=>openEditor(true);$('cancel').onclick=()=>$('itemDialog').close();
- function updateItemTranslationFields(){const type=$('typeInput').value;$('translationFields').hidden=type!=='Scripture';$('bibleTools').hidden=type!=='Scripture';$('songTools').hidden=type!=='Song';$('saveSongTemplate').hidden=type!=='Song';$('titleInput').required=type!=='Scripture';$('titleLabel').textContent=type==='Scripture'?'Title (optional)':'Title';if(type==='Scripture')return prepareBible()}
+ function updateItemTranslationFields(){const type=$('typeInput').value;$('countdownFields').hidden=type!=='Countdown';$('textInputRow').hidden=type==='Countdown';$('textInput').required=type!=='Countdown';renderCountdownFields();$('translationFields').hidden=type!=='Scripture';$('bibleTools').hidden=type!=='Scripture';$('songTools').hidden=type!=='Song';$('saveSongTemplate').hidden=type!=='Song';$('titleInput').required=type!=='Scripture';$('titleLabel').textContent=type==='Scripture'?'Title (optional)':'Title';if(type==='Scripture')return prepareBible()}
  $('typeInput').onchange=updateItemTranslationFields;
+ // Countdown editor: a length of time or a clock time, text above the timer, and what happens at zero.
+ function renderCountdownFields(){
+  const clock=$('countdownMode').value==='clock';
+  $('countdownMinutesRow').hidden=clock;$('countdownSecondsRow').hidden=clock;$('countdownTimeRow').hidden=!clock;
+  $('countdownEndMessageRow').hidden=$('countdownEnd').value!=='message';
+ }
+ $('countdownMode').onchange=renderCountdownFields;$('countdownEnd').onchange=renderCountdownFields;
+ function fillCountdownFields(countdown){
+  const c=countdown||{mode:'duration',seconds:300,message:'',end:'zero',endMessage:''};
+  $('countdownMode').value=c.mode;$('countdownMinutes').value=String(Math.floor((c.seconds||300)/60));$('countdownSeconds').value=String((c.seconds||300)%60);
+  $('countdownTime').value=c.time||'10:30';$('countdownMessage').value=c.message;$('countdownEnd').value=c.end;$('countdownEndMessage').value=c.endMessage;
+  renderCountdownFields();
+ }
+ function countdownFromFields(){
+  const base={message:$('countdownMessage').value.trim(),end:$('countdownEnd').value,endMessage:$('countdownEnd').value==='message'?$('countdownEndMessage').value.trim():''};
+  if($('countdownMode').value==='clock')return {mode:'clock',time:$('countdownTime').value,...base};
+  return {mode:'duration',seconds:Math.max(0,Math.round(Number($('countdownMinutes').value)||0))*60+Math.min(59,Math.max(0,Math.round(Number($('countdownSeconds').value)||0))),...base};
+ }
  $('itemForm').onsubmit=e=>{
-  e.preventDefault();const type=$('typeInput').value,title=$('titleInput').value.trim()||(type==='Scripture'?'Scripture':''),slides=$('textInput').value.trim().split(/\n\s*\n/).filter(Boolean);
+  e.preventDefault();const type=$('typeInput').value,title=$('titleInput').value.trim()||(type==='Scripture'?'Scripture':type==='Countdown'?'Countdown':'');
+  let slides=$('textInput').value.trim().split(/\n\s*\n/).filter(Boolean),countdown=null;
+  if(type==='Countdown'){
+   countdown=countdownFromFields();
+   if(!SlideTemplate.validCountdown(countdown)){toast('Set a countdown between 1 second and 24 hours, or a clock time.');return}
+   slides=[(countdown.message?countdown.message+'\n':'')+(countdown.mode==='clock'?countdown.time:SlideTemplate.clockText(countdown.seconds))];
+  }
   if(!slides.length||slides.length>200||slides.some(text=>text.length>20000)||!title){toast('Enter a title (optional for Scripture) and 1–200 slides, with fewer than 20,000 characters per slide.');return}
   if(!editing&&service.items.length>=200){toast('This service has reached the 200-item limit.');return}
-  const item={title,type,slides};
+  const item={title,type,slides,...(countdown?{countdown}:{})};
   if(type==='Song'){
    const source=chosenSongStyle?{slides:chosenSongSlides,sectionLabels:chosenSongStyle.sectionLabels}:editing&&current()?.type==='Song'?current():null;
    const labels=source&&remapSectionLabels(source.slides,source.sectionLabels,slides);
@@ -820,7 +855,7 @@ if(mode==='audience'||mode==='stage'){
    }
   }
   if(editing&&current()?.slideScreens&&current().slides.length===item.slides.length)item.slideScreens=current().slideScreens;
-  if(editing){const existing=current();Object.assign(existing,item);if(type==='Song'&&chosenSongStyle){existing.theme=chosenSongStyle.theme;if(chosenSongStyle.template)existing.template=chosenSongStyle.template;else delete existing.template}['primaryVersion','secondaryVersion','secondarySlides','sectionLabels','fitText','verseSlides','secondaryVerseSlides','slideScreens'].forEach(key=>{if(item[key]===undefined)delete existing[key]})}
+  if(editing){const existing=current();Object.assign(existing,item);if(type==='Song'&&chosenSongStyle){existing.theme=chosenSongStyle.theme;if(chosenSongStyle.template)existing.template=chosenSongStyle.template;else delete existing.template}['primaryVersion','secondaryVersion','secondarySlides','sectionLabels','fitText','verseSlides','secondaryVerseSlides','slideScreens','countdown'].forEach(key=>{if(item[key]===undefined)delete existing[key]})}
   else{const created={id:crypto.randomUUID(),...item,theme:type==='Song'&&chosenSongStyle?chosenSongStyle.theme:'dusk',...(type==='Song'&&chosenSongStyle?.template?{template:chosenSongStyle.template}:{})};service.items.push(created);selected=created.id}
   index=0;persist();render();$('itemDialog').close()
  };
@@ -1158,6 +1193,7 @@ if(mode==='audience'||mode==='stage'){
    setBranding:record=>saveBrandingRecord(structuredClone(record)),
    showBrandingConflict(remote){brandingConflict=structuredClone(remote);renderBranding();$('brandingStatus').textContent='Branding changed on another computer · choose which to keep.'},
    renderBranding,
+   advanceLive:()=>advanceLive(),
    setRole(role){this.role=role;['take','clear','blackout','audience','stage'].forEach(id=>$(id).disabled=role==='editor'||(id==='take'&&!current()));}
  };
  persist();render();

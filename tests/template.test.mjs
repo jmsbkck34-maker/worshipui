@@ -52,3 +52,25 @@ test('per-slide screen targets must line up with the slides',()=>{
  assert.equal(validService({title:'S',items:[{...item,slideScreens:['','2']}]}),true);
  for(const bad of [['2'],['','3'],['',''],'2'])assert.equal(validService({title:'S',items:[{...item,slideScreens:bad}]}),false);
 });
+
+test('countdown items validate, find their end time and format the remaining time',()=>{
+ const minutes={mode:'duration',seconds:300,message:'Service begins in',end:'zero',endMessage:''};
+ assert.equal(SlideTemplate.validCountdown(minutes),true);
+ assert.equal(SlideTemplate.validCountdown({...minutes,seconds:0}),false);
+ assert.equal(SlideTemplate.validCountdown({mode:'clock',time:'10:30',message:'',end:'next',endMessage:''}),true);
+ assert.equal(SlideTemplate.validCountdown({mode:'clock',time:'25:00',message:'',end:'next',endMessage:''}),false);
+ const now=new Date(2026,10,22,10,0,0).getTime();
+ assert.equal(SlideTemplate.countdownTarget(minutes,now),now+300000);
+ assert.equal(SlideTemplate.countdownTarget({mode:'clock',time:'10:30',message:'',end:'zero',endMessage:''},now),new Date(2026,10,22,10,30,0).getTime());
+ // A clock time already past today means tomorrow.
+ assert.equal(SlideTemplate.countdownTarget({mode:'clock',time:'09:00',message:'',end:'zero',endMessage:''},now),new Date(2026,10,23,9,0,0).getTime());
+ const live={target:now+65000,message:'Service begins in',end:'message',endMessage:'Welcome!'};
+ assert.equal(SlideTemplate.countdownText(live,now),'Service begins in\n1:05');
+ assert.equal(SlideTemplate.countdownText({...live,target:now+3725000},now),'Service begins in\n1:02:05');
+ assert.equal(SlideTemplate.countdownText(live,now+70000),'Welcome!');
+ assert.equal(SlideTemplate.countdownText({...live,end:'zero'},now+70000),'Service begins in\n0:00');
+ const item={id:'c',title:'Countdown',type:'Countdown',theme:'midnight',slides:['Service begins in\n5:00'],countdown:minutes};
+ assert.equal(validService({title:'S',items:[item]}),true);
+ assert.equal(validService({title:'S',items:[{...item,countdown:undefined}]}),false);
+ assert.equal(validService({title:'S',items:[{...item,type:'Song'}]}),false);
+});

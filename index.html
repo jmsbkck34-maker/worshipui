@@ -275,7 +275,7 @@
   <div class="dialog-actions dialog-actions-top"><button type="button" id="delete">Delete item</button><span></span><button type="button" id="cancel">Cancel</button><button class="primary" type="submit">Save item</button></div>
   <div class="eyebrow">SERVICE ITEM</div>
   <h2 id="dialogTitle">Add to your service</h2>
-  <label>Type<select id="typeInput"><option>Song</option><option>Scripture</option><option>Announcement</option><option>Sermon</option></select></label>
+  <label>Type<select id="typeInput"><option>Song</option><option>Scripture</option><option>Announcement</option><option>Sermon</option><option>Countdown</option></select></label>
   <section id="songTools" class="item-library">
    <h3>Find a song or template</h3>
    <label>Search saved songs<input id="songSearch" type="search" placeholder="Song title or lyrics"></label>
@@ -309,7 +309,18 @@
    <p id="bibleStatus" role="status">Choose a book, chapter and verse range. When editing, selection fills the item for review.</p>
   </section>
   <label><span id="titleLabel">Title</span><input id="titleInput" required maxlength="100"></label>
-  <label>Slide text<textarea id="textInput" rows="9" placeholder="Enter lyrics or text. Separate slides with a blank line." required></textarea></label>
+  <div id="countdownFields" class="countdown-fields" hidden>
+   <label>Count down<select id="countdownMode"><option value="duration">A length of time</option><option value="clock">To a clock time</option></select></label>
+   <div class="countdown-row">
+    <label id="countdownMinutesRow">Minutes<input id="countdownMinutes" type="number" min="0" max="1440" value="5"></label>
+    <label id="countdownSecondsRow">Seconds<input id="countdownSeconds" type="number" min="0" max="59" value="0"></label>
+    <label id="countdownTimeRow" hidden>Clock time<input id="countdownTime" type="time" value="10:30"></label>
+   </div>
+   <label>Text above the timer<input id="countdownMessage" maxlength="100" placeholder="Service begins in"></label>
+   <label>At zero<select id="countdownEnd"><option value="zero">Stay on 0:00</option><option value="message">Show a message</option><option value="next">Go to the next item</option></select></label>
+   <label id="countdownEndMessageRow" hidden>Message at zero<input id="countdownEndMessage" maxlength="100" placeholder="Welcome!"></label>
+  </div>
+  <label id="textInputRow">Slide text<textarea id="textInput" rows="9" placeholder="Enter lyrics or text. Separate slides with a blank line." required></textarea></label>
   <button id="saveSongTemplate" type="button">Save song to library</button>
   <div id="translationFields" hidden>
    <label>Primary translation / version<input id="itemPrimaryVersion" maxlength="80"></label>

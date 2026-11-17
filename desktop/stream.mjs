@@ -30,7 +30,9 @@ export function streamState(output,settings,ccli){
  }
  const streaming=typeof ccli?.streaming==='string'?ccli.streaming.trim():'';
  const license=s.ccli&&lines.length&&o.type==='Song'&&streaming?'CCLI Streaming License #'+streaming:'';
- return {layout:s.layout,fontSize:s.fontSize,background:s.background,lines:lines.map(line=>line.slice(0,20000)),license};
+ // A live countdown is drawn by the overlay page itself, so it ticks without a message every second.
+ const countdown=!o.black&&!o.clear&&o.countdown&&Number.isFinite(o.countdown.target)?{target:o.countdown.target,message:String(o.countdown.message||'').slice(0,100),end:o.countdown.end,endMessage:String(o.countdown.endMessage||'').slice(0,100)}:null;
+ return {layout:s.layout,fontSize:s.fontSize,background:s.background,lines:countdown?[]:lines.map(line=>line.slice(0,20000)),license:countdown?'':license,...(countdown?{countdown}:{})};
 }
 
 const page=`<!doctype html><html><head><meta charset="utf-8"><title>WorshipUI stream</title><style>
@@ -46,7 +48,12 @@ html,body{margin:0;width:100%;height:100%;background:transparent;overflow:hidden
 </style></head><body><div id="box"></div><div id="license"></div><script>
 const box=document.getElementById('box'),license=document.getElementById('license');
 function fit(size){box.style.fontSize=size+'px';let n=size;while(n>18&&box.scrollHeight>box.clientHeight+1){n-=2;box.style.fontSize=n+'px'}}
+let current=null,ticking=null;
+function clock(seconds){const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;return (h?h+':'+String(m).padStart(2,'0'):String(m))+':'+String(s).padStart(2,'0')}
+function countdownLines(c){const left=Math.max(0,Math.ceil((c.target-Date.now())/1000));if(!left&&c.end==='message'&&c.endMessage)return [c.endMessage];return [(c.message?c.message+'\\n':'')+clock(left)]}
 function show(state){
+ current=state;clearTimeout(ticking);
+ if(state.countdown){state={...state,lines:countdownLines(state.countdown)};ticking=setTimeout(()=>show(current),250)}
  box.className=state.layout+' '+(state.background==='band'?'band':'');box.replaceChildren();
  state.lines.forEach((text,n)=>{const part=document.createElement('div');if(n)part.className='second';part.textContent=text;box.append(part)});
  box.style.display=state.lines.length?(state.layout==='full'?'flex':'block'):'none';

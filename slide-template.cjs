@@ -32,6 +32,30 @@
  function validBrandingRecord(value){
   return !!value&&value.version===1&&validBranding(value.branding)&&Number.isInteger(value.baseRevision)&&value.baseRevision>=0&&(value.baseBranding===null||validBranding(value.baseBranding));
  }
- const api={fonts,bundledFonts,motions,defaults,validTemplate,normalize,textPosition,emptyBranding,validBranding,validBrandingRecord};
+ // Countdown items: a length of time ("5:00") or a clock time ("10:30"), text above the timer, and what happens at zero.
+ const countdownEnds=['zero','message','next'];
+ const shortText=value=>typeof value==='string'&&value.length<=100;
+ function validCountdown(value){
+  return !!value&&typeof value==='object'&&!Array.isArray(value)&&shortText(value.message)&&countdownEnds.includes(value.end)&&shortText(value.endMessage)&&
+   (value.mode==='duration'&&Number.isInteger(value.seconds)&&value.seconds>=1&&value.seconds<=86400&&value.time===undefined||
+    value.mode==='clock'&&typeof value.time==='string'&&/^([01]\d|2[0-3]):[0-5]\d$/.test(value.time)&&value.seconds===undefined);
+ }
+ // When a countdown taken live at `now` reaches zero (a clock time already past today means tomorrow).
+ function countdownTarget(countdown,now){
+  if(countdown.mode==='duration')return now+countdown.seconds*1000;
+  const [hours,minutes]=countdown.time.split(':').map(Number),target=new Date(now);target.setHours(hours,minutes,0,0);
+  if(target.getTime()<=now)target.setDate(target.getDate()+1);
+  return target.getTime();
+ }
+ // The live form of a countdown: {target, message, end, endMessage}.
+ function validLiveCountdown(value){return !!value&&Number.isFinite(value.target)&&shortText(value.message)&&countdownEnds.includes(value.end)&&shortText(value.endMessage)}
+ function clockText(seconds){const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;return (h?h+':'+String(m).padStart(2,'0'):String(m))+':'+String(s).padStart(2,'0')}
+ // Text to show for a live countdown at `now`: the message above the remaining time, or the end message at zero.
+ function countdownText(live,now){
+  const remaining=Math.max(0,Math.ceil((live.target-now)/1000));
+  if(remaining===0&&live.end==='message'&&live.endMessage)return live.endMessage;
+  return (live.message?live.message+'\n':'')+clockText(remaining);
+ }
+ const api={fonts,bundledFonts,motions,defaults,validTemplate,normalize,textPosition,emptyBranding,validBranding,validBrandingRecord,validCountdown,countdownTarget,validLiveCountdown,countdownText,clockText};
  if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.SlideTemplate=api;
 })(globalThis);

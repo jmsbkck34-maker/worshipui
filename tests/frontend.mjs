@@ -375,6 +375,19 @@ check(licensedItem.primaryVersion,'NIV');check(licensedItem.slides[0].startsWith
  licensed.node('licensedId').value='esv';licensed.node('licensedName').value='English Standard Version';licensed.node('licensedLanguage').value='en';
  await licensed.node('licensedFile').onchange({target:{files:[{text:async()=>'GEN 1:1 In the beginning'}],value:''}});
  check(saved[0][0],{id:'ESV',name:'English Standard Version',language:'en'});check(licensed.node('licensedList').children.length,2);
+ // Countdown items: made in the editor, shown as one slide, and live with a running timer.
+ const timer=await client('operator',false);
+ timer.node('add').onclick();timer.node('typeInput').value='Countdown';await timer.node('typeInput').onchange();
+ check(timer.node('countdownFields').hidden,false);check(timer.node('textInputRow').hidden,true);
+ timer.node('countdownMode').value='duration';timer.node('countdownMinutes').value='2';timer.node('countdownSeconds').value='30';
+ timer.node('countdownMessage').value='Service begins in';timer.node('countdownEnd').value='message';timer.node('countdownEndMessage').value='Welcome!';
+ timer.node('titleInput').value='';timer.node('itemForm').onsubmit({preventDefault(){}});
+ const countdownItem=timer.context.worshipWorkspace.getService().items.at(-1);
+ check([countdownItem.title,countdownItem.type,countdownItem.slides],['Countdown','Countdown',['Service begins in\n2:30']]);
+ check(countdownItem.countdown,{mode:'duration',seconds:150,message:'Service begins in',end:'message',endMessage:'Welcome!'});
+ const timerStart=Date.now();timer.node('take').onclick();const liveTimer=JSON.parse(timer.storage.get(liveKey));
+ check(liveTimer.type,'Countdown');check(liveTimer.countdown.target>=timerStart+150000&&liveTimer.countdown.target<=Date.now()+150000,true);
+ check(timer.node('live').children[0].textContent.startsWith('Service begins in\n2:'),true);
  const remoteEditor=await client('editor',false);remoteEditor.node('slides').children[1].onclick();remoteEditor.node('slides').children[1].onclick();check(remoteEditor.storage.has(liveKey),false);
  return checks;
 }

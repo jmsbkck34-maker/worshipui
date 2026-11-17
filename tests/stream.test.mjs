@@ -60,3 +60,11 @@ test('network overlay requires the access key from other computers; this compute
  const local=await createStreamServer(()=>({}),{ports:[0]});
  try{assert.equal(local.network,false);assert.deepEqual(local.networkUrls,[])}finally{local.close()}
 });
+
+test('a live countdown reaches the overlay as a timer the page draws itself',()=>{
+ const live={text:'Service begins in\n5:00',type:'Countdown',black:false,clear:false,countdown:{target:1_000_000,message:'Service begins in',end:'message',endMessage:'Welcome!'}};
+ const state=streamState(live,defaultStreamSettings,ccli);
+ assert.deepEqual(state.lines,[]);assert.equal(state.license,'');
+ assert.deepEqual(state.countdown,{target:1_000_000,message:'Service begins in',end:'message',endMessage:'Welcome!'});
+ assert.equal(streamState({...live,black:true},defaultStreamSettings,ccli).countdown,undefined);
+});
