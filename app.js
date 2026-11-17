@@ -102,7 +102,8 @@ function paint(el,text,theme,black=false,template,options={}){
  el.className='screen '+(black?'':theme)+(!black&&style.backgroundType==='motion'?' motion-background motion-'+style.motion+(style.motionPaused?' motion-paused':''):'');
  el.style.backgroundImage='';el.style.backgroundColor='';
  el.style.setProperty('--slide-font-size',String(style.fontSize));
- el.style.fontFamily='"'+style.font+'", sans-serif';
+ // Fonts missing on a computer (for example Segoe UI on a Mac) fall back to the bundled Inter.
+ el.style.fontFamily='"'+style.font+'", "Inter", sans-serif';
  if(!black&&style.backgroundType==='color'){el.style.backgroundImage='none';el.style.backgroundColor=style.color}
  if(!black&&style.backgroundType==='image')el.style.backgroundImage='url("'+style.image+'")';
  const position=SlideTemplate.textPosition(template);
@@ -144,7 +145,7 @@ function renderOutput(){
  else if(mode==='stage'){
   $('current').className='stage-slide';$('upNext').className='stage-slide stage-next';
   const template=SlideTemplate.normalize(output.template);
-  ['current','upNext'].forEach(id=>{$(id).style.setProperty('--slide-font-size',String(template.fontSize));$(id).style.fontFamily='"'+template.font+'", sans-serif'});
+  ['current','upNext'].forEach(id=>{$(id).style.setProperty('--slide-font-size',String(template.fontSize));$(id).style.fontFamily='"'+template.font+'", "Inter", sans-serif'});
   slideContent($('current'),output.black||output.clear?'':output.text||'Waiting for the first slide',output.black||output.clear?{}:options);
   slideContent($('upNext'),output.next||'End of item',{secondaryText:output.nextSecondaryText||'',primaryVersion:output.primaryVersion||'',secondaryVersion:output.secondaryVersion||''});
   $('stageState').textContent=output.black?'AUDIENCE BLACKED OUT':output.clear?'AUDIENCE LYRICS CLEARED':'CURRENT SLIDE';

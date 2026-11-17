@@ -145,3 +145,16 @@ The **English / Español** toggle under the WorshipUI name sets the main languag
 The live column's **Audience screens** panel opens Screen 1 and Screen 2 and sets what each shows: both languages, the first language only, or the second only — for example English on one projector and Spanish on the other. **Selected slide shows on** sends a slide to all screens or to one screen; the other screen keeps what it was showing. Blackout and Clear lyrics apply to every screen. The header **Audience** button opens Screen 1.
 
 The **English / Español** toggle also switches the whole interface — menus, buttons, dialogs, status messages and the Audience/Stage windows — between English and Spanish (`i18n.js`). Slide content, item titles, lyrics, Scripture and anything typed into fields are never translated. `tests/i18n.test.mjs` fails if a new label in `index.html` has no Spanish translation.
+
+## macOS
+
+GitHub builds the Mac app automatically (`.github/workflows/build-mac.yml`) on every push to a `work/**` branch or `main`, and when run by hand from the **Actions** tab. Open the finished run and download **WorshipUI-mac** under *Artifacts*. It contains `WorshipUI-<version>-mac.dmg`, a universal app for Intel and Apple Silicon Macs. To build on a Mac yourself: `npm ci`, then `npm run build:mac`.
+
+The app is ad-hoc signed, without an Apple Developer account, so each Mac approves it once:
+
+1. Open the `.dmg` and drag **WorshipUI** to **Applications**.
+2. Open WorshipUI. When macOS blocks it, choose **Done**.
+3. Go to **System Settings → Privacy & Security**, find "WorshipUI was blocked", choose **Open Anyway** and enter the Mac's password. On macOS 14 and earlier you can instead Control-click the app and choose **Open**.
+4. If macOS says the app "is damaged", run `xattr -dr com.apple.quarantine /Applications/WorshipUI.app` in Terminal, then open it again.
+
+The Mac app has a standard menu bar, so Cmd+C, Cmd+V and Cmd+Q work. Fonts a Mac does not have, such as Segoe UI, fall back to the bundled Inter. Signing and notarizing with an Apple Developer account ($99/year) would remove the approval step.

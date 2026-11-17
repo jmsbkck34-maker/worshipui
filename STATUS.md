@@ -27,6 +27,7 @@ Branch: `work/setlist-history-20261116` (version 0.3.3). Automated tests: 26 pas
 
 ## Not tested yet
 
+- **macOS app:** it is built by GitHub Actions (`build-mac.yml`) and ad-hoc signed, but has not been run on a real Mac. The install steps, including Open Anyway, are in the README.
 - Placing windows on a second physical display (the development PC has one display).
 - The hidden **Get verses from YouVersion** fetch, added at the end of the session, passes the automated tests but has not been tried against live bible.com. The earlier visible-window version, which uses the same verse reader, was verified with John 3:16–17.
 - The copy-and-paste YouVersion route was verified with one real bible.com copy (John 3:1). The in-app bible.com window was verified with John 3:16–17 in NIV and ESV.

@@ -1,4 +1,4 @@
-import {app,BrowserWindow,ipcMain,dialog,shell,screen,clipboard} from 'electron';
+import {app,BrowserWindow,ipcMain,dialog,shell,screen,clipboard,Menu} from 'electron';
 import {readFileSync,writeFileSync,existsSync,renameSync,mkdirSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import path from 'node:path';
@@ -124,6 +124,8 @@ else {
    window.webContents.on('will-attach-webview',event=>event.preventDefault());
    window.webContents.session.setPermissionRequestHandler((_contents,_permission,callback)=>callback(false));
   }
+  // macOS needs an application menu for Cmd+C/V/X/A, Cmd+Q and window shortcuts; Windows keeps the menu bar hidden.
+  if(process.platform==='darwin')Menu.setApplicationMenu(Menu.buildFromTemplate([{role:'appMenu'},{role:'editMenu'},{role:'windowMenu'}]));
   main=new BrowserWindow({title:'WorshipUI — Church workspace',width:1440,height:950,minWidth:800,minHeight:600,backgroundColor:'#101217',webPreferences:preferences});
   main.setMenuBarVisibility(false);protect(main);
   main.webContents.setWindowOpenHandler(({url})=>{
