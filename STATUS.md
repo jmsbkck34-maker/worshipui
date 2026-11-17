@@ -1,9 +1,10 @@
 # WorshipUI status — 2026-11-16
 
-Branch: `work/setlist-history-20261116` (version 0.3.4). Automated tests: 27 passing (`npm test`).
+Branch: `work/setlist-history-20261116` (version 0.3.4). Automated tests: 29 passing (`npm test`).
 
 ## Working in the demo
 
+- **Livestream (OBS):** Screens → Livestream (OBS) gives an overlay address (http://127.0.0.1:48095/stream) to add in OBS as a Browser source over the camera, for YouTube or Facebook Live. It has a lower-third or full-screen layout and a language choice, follows Take live, Blackout and Clear, and shows the CCLI Streaming License number on songs. Verified in the installed app (overlay updates). OBS itself is not tested here; setup steps are in the README.
 - **Slide editing:** drag slides to reorder them, or use ◀ Move / Move ▶, Duplicate slide (for example to repeat a chorus) and Delete slide. Section labels, screen targets and second translations move with their slides, and the live slide stays correct.
 - **Licensed Bible versions (Settings):** import a text file for a version the church is licensed to use (for example NIV). It is stored only in the desktop app data folder, never in services, sync, backups or Git, and appears under Version when adding Scripture. Includes links to publisher permission pages and API sign-ups. Not tested in the installed app yet; tested with a stand-in in the automated tests.
 - **Songs:** SongSelect text import with section labels. A newly imported song appears in search and loads into the editor. Each slide can have a section label (Verse 1, Chorus, …).

@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('worshipDesktop',{
  openYouVersion:url=>ipcRenderer.invoke('wui:open-youversion',url),
  readClipboard:()=>ipcRenderer.invoke('wui:read-clipboard'),
  fetchBible:url=>ipcRenderer.invoke('wui:fetch-bible',url),
+ streamInfo:()=>ipcRenderer.invoke('wui:stream-info'),
+ copyStreamUrl:()=>ipcRenderer.invoke('wui:copy-stream-url'),
  listBibles:()=>ipcRenderer.invoke('wui:list-bibles'),
  readBible:id=>ipcRenderer.invoke('wui:read-bible',id),
  saveBible:(version,text)=>ipcRenderer.invoke('wui:save-bible',version,text),

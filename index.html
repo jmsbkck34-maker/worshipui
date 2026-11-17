@@ -84,6 +84,19 @@
  </div>
  <div class="dialog-actions"><button id="identifyDisplays" type="button">Identify displays</button><button id="openAllScreens" class="primary" type="button">Open all assigned screens</button></div>
  <p id="screensStatus" class="subtle" role="status"></p>
+ <section class="stream-section">
+  <h3>Livestream (OBS)</h3>
+  <p class="subtle">Show lyrics and Scripture over your camera on YouTube or Facebook Live. In OBS Studio, add a <strong>Browser</strong> source with this address, width 1920 and height 1080. It follows whatever you take live.</p>
+  <div class="stream-address"><input id="streamUrl" readonly aria-label="Livestream overlay address"><button id="copyStreamUrl" type="button">Copy address</button><button id="previewStream" type="button">Preview</button></div>
+  <div class="stream-grid">
+   <label>Layout<select id="streamLayout"><option value="lower">Lower third</option><option value="full">Full screen</option></select></label>
+   <label>Shows<select id="streamShow"><option value="both">Both languages</option><option value="first">First language</option><option value="second">Second language</option></select></label>
+   <label>Background<select id="streamBackground"><option value="band">Dark band behind text</option><option value="transparent">Text only</option></select></label>
+   <label>Text size<input id="streamFontSize" type="range" min="24" max="120" step="2"></label>
+  </div>
+  <label class="check-row"><input id="streamCcli" type="checkbox"> Show the CCLI Streaming License number on song slides</label>
+  <p id="streamStatus" class="subtle" role="status"></p>
+ </section>
 </dialog>
 <dialog id="templateDialog">
  <div class="eyebrow">SLIDE APPEARANCE</div>

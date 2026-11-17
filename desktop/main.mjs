@@ -5,6 +5,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {openDeviceStore,sharedOrigin} from './storage.mjs';
 import {createDesktopHost} from './host.mjs';
+import {createStreamServer,streamState} from './stream.mjs';
 const here=path.dirname(fileURLToPath(import.meta.url)),root=path.dirname(here);
 // Keep the original "Worship UI" data folder in AppData so existing services survive the rename.
 app.setPath('userData',path.join(app.getPath('appData'),'Worship UI'));
@@ -23,9 +24,17 @@ else {
   if(existsSync(settingsFile))settings={origin:sharedOrigin(JSON.parse(readFileSync(settingsFile,'utf8')).origin||'')};
   store=openDeviceStore(path.join(app.getPath('userData'),'workspace'));
   host=await createDesktopHost(root,settings.origin);
+  // Livestream overlay for OBS, fed from the live slide, the stream settings and the CCLI numbers.
+  const stored=key=>{try{return JSON.parse(store.getItem(key)||'null')}catch{return null}};
+  let stream=null,streamError='';
+  try{stream=await createStreamServer(()=>streamState(stored('worshipui.live.v1'),stored('worshipui.stream.v1'),stored('worshipui.ccli.v1')),{font:readFileSync(path.join(root,'assets','fonts','Inter.ttf'))})}
+  catch(error){streamError=error.message}
+  app.on('before-quit',()=>stream?.close());
+  ipcMain.handle('wui:copy-stream-url',event=>{if(!trusted(event)||event.sender!==main.webContents||!stream)throw Error('Untrusted window');clipboard.writeText(stream.url)});
+  ipcMain.handle('wui:stream-info',event=>{if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');return stream?{url:stream.url}:{error:streamError}});
   ipcMain.on('wui:read',(event,key)=>{try{if(!trusted(event))throw Error('Untrusted window');event.returnValue={value:store.getItem(key)}}catch{event.returnValue={error:'Unable to read local workspace'}}});
   ipcMain.on('wui:write',(event,key,value)=>{
-   try{if(!trusted(event)||event.sender!==main.webContents)throw Error('Read-only display');store.setItem(key,value);event.returnValue={ok:true};for(const window of windows)if(!window.isDestroyed()&&window.webContents!==event.sender)window.webContents.send('wui:storage',{key,value})}
+   try{if(!trusted(event)||event.sender!==main.webContents)throw Error('Read-only display');store.setItem(key,value);event.returnValue={ok:true};if(['worshipui.live.v1','worshipui.stream.v1','worshipui.ccli.v1'].includes(key))stream?.update();for(const window of windows)if(!window.isDestroyed()&&window.webContents!==event.sender)window.webContents.send('wui:storage',{key,value})}
    catch{event.returnValue={error:'Unable to save local workspace. Use Back up.'}}
   });
   ipcMain.on('wui:connection',(event)=>{event.returnValue=trusted(event)?{origin:settings.origin}:{} });
@@ -163,6 +172,8 @@ else {
    const target=new URL(url);
    // Links in Settings to SongSelect and Bible licensing/provider sites open in the system browser; nothing else does.
    const externalHosts=['songselect.ccli.com','docs.api.bible','api.bible','api.esv.org','ebible.org','www.biblica.com','www.crossway.org','www.tyndale.com','www.harpercollinschristian.com','www.lockman.org'];
+   // The overlay preview opens in the system browser too.
+   if(stream&&target.href===stream.url){shell.openExternal(target.href).catch(()=>{});return {action:'deny'}}
    if(target.protocol==='https:'&&externalHosts.includes(target.hostname)){shell.openExternal(target.href).catch(error=>dialog.showErrorBox('Unable to open the link',error.message));return {action:'deny'}}
    if(target.origin!==host.origin||target.pathname!=='/'||!['audience','stage'].includes(target.searchParams.get('view')))return {action:'deny'};
    return {action:'allow',overrideBrowserWindowOptions:{width:1100,height:720,autoHideMenuBar:true,backgroundColor:'#000000',webPreferences:preferences}};

@@ -2,7 +2,8 @@ import {readFileSync,writeFileSync,renameSync,existsSync,mkdirSync} from 'node:f
 import path from 'node:path';
 import {validService} from '../server.mjs';
 import SlideTemplate from '../slide-template.cjs';
-const KEYS=new Set(['worshipui.service.v1','worshipui.sync.v1','worshipui.recovery.v1','worshipui.ccli.v1','worshipui.setlists.v1','worshipui.songs.v1','worshipui.branding.v1','worshipui.language.v1','worshipui.screens.v1']);
+import {validStreamSettings} from './stream.mjs';
+const KEYS=new Set(['worshipui.service.v1','worshipui.sync.v1','worshipui.recovery.v1','worshipui.ccli.v1','worshipui.setlists.v1','worshipui.songs.v1','worshipui.branding.v1','worshipui.language.v1','worshipui.screens.v1','worshipui.stream.v1']);
 const CCLI_FIELDS=['churchCopyright','streaming','streamingPlus','rehearsal'];
 function validCcliSettings(value){return value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===CCLI_FIELDS.length&&CCLI_FIELDS.every(key=>typeof value[key]==='string'&&value[key].length<=80)}
 function validDate(value){if(!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value))return false;const date=new Date(value+'T00:00:00Z');return Number.isFinite(date.getTime())&&date.toISOString().slice(0,10)===value}
@@ -29,6 +30,7 @@ export function openDeviceStore(directory){
    if(key==='worshipui.service.v1'&&!validService(parsed))throw Error('Invalid service');
    if(key==='worshipui.ccli.v1'&&!validCcliSettings(parsed))throw Error('Invalid CCLI settings');
    if(key==='worshipui.setlists.v1'&&!validLibrary(parsed))throw Error('Invalid setlist library');
+   if(key==='worshipui.stream.v1'&&!validStreamSettings(parsed))throw Error('Invalid stream settings');
    if(key==='worshipui.branding.v1'&&!SlideTemplate.validBrandingRecord(parsed))throw Error('Invalid branding');
    if(key==='worshipui.screens.v1'&&!(parsed&&parsed.version===1&&Array.isArray(parsed.screens)&&parsed.screens.length===2&&parsed.screens.every(screen=>screen&&['both','first','second'].includes(screen.show)&&(screen.display===undefined||Number.isSafeInteger(screen.display)))&&
     (parsed.stage===undefined||!!parsed.stage&&typeof parsed.stage==='object'&&(parsed.stage.display===undefined||Number.isSafeInteger(parsed.stage.display)))))throw Error('Invalid screen settings');

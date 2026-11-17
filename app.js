@@ -43,7 +43,7 @@ function storeService(next){
 }
 let selected=service.items[0]?.id,index=0,editing=false,output=read(LIVE,{text:'',next:'',theme:'midnight',black:false,clear:false});
 const mode=new URLSearchParams(location.search).get('view');
-function safeOutput(o){const optionalText=value=>value===undefined||typeof value==='string'&&value.length<=20000;return o&&typeof o.text==='string'&&typeof o.next==='string'&&themes.includes(o.theme)&&typeof o.black==='boolean'&&typeof o.clear==='boolean'&&(o.fitText===undefined||typeof o.fitText==='boolean')&&SlideTemplate.validTemplate(o.template)&&optionalText(o.secondaryText)&&optionalText(o.nextSecondaryText)&&optionalText(o.primaryVersion)&&optionalText(o.secondaryVersion)&&optionalText(o.ccliFooter)&&(o.screen===undefined||SCREEN_TARGETS.includes(o.screen))}
+function safeOutput(o){const optionalText=value=>value===undefined||typeof value==='string'&&value.length<=20000;return o&&typeof o.text==='string'&&typeof o.next==='string'&&themes.includes(o.theme)&&typeof o.black==='boolean'&&typeof o.clear==='boolean'&&(o.fitText===undefined||typeof o.fitText==='boolean')&&SlideTemplate.validTemplate(o.template)&&optionalText(o.secondaryText)&&optionalText(o.nextSecondaryText)&&optionalText(o.primaryVersion)&&optionalText(o.secondaryVersion)&&optionalText(o.ccliFooter)&&(o.screen===undefined||SCREEN_TARGETS.includes(o.screen))&&(o.type===undefined||['Song','Scripture','Announcement','Sermon'].includes(o.type))}
 if(!safeOutput(output))output={text:'',next:'',theme:'midnight',black:false,clear:false};
 let ccliSettings={...emptyCcliSettings},ccliSettingsError='';
 try{
@@ -401,7 +401,7 @@ if(mode==='audience'||mode==='stage'){
  };
  let livePosition=null;
  function broadcast(){if(window.worshipWorkspace?.role==='editor')return;try{workspaceStorage.setItem(LIVE,JSON.stringify(output))}catch{toast('Cannot connect output windows: browser storage is unavailable.')}renderOutput();if(!mode&&window.worshipWorkspace)window.worshipWorkspace.setRole(window.worshipWorkspace.role)}
- function take(preserveBlanking=false){if(window.worshipWorkspace?.role==='editor')return;const i=current();if(!i)return;livePosition={id:i.id,index};output={text:i.slides[index],next:i.slides[index+1]||'',secondaryText:i.secondarySlides?.[index]||'',nextSecondaryText:i.secondarySlides?.[index+1]||'',primaryVersion:i.primaryVersion||'',secondaryVersion:i.secondaryVersion||'',fitText:!!i.fitText,ccliFooter:i.type==='Song'&&ccliSettings.churchCopyright?'CCLI License #'+ccliSettings.churchCopyright:'',theme:i.theme,template:SlideTemplate.normalize(i.template),screen:i.slideScreens?.[index]||'',black:preserveBlanking&&output.black,clear:preserveBlanking&&output.clear};broadcast()}
+ function take(preserveBlanking=false){if(window.worshipWorkspace?.role==='editor')return;const i=current();if(!i)return;livePosition={id:i.id,index};output={text:i.slides[index],next:i.slides[index+1]||'',secondaryText:i.secondarySlides?.[index]||'',nextSecondaryText:i.secondarySlides?.[index+1]||'',primaryVersion:i.primaryVersion||'',secondaryVersion:i.secondaryVersion||'',fitText:!!i.fitText,ccliFooter:i.type==='Song'&&ccliSettings.churchCopyright?'CCLI License #'+ccliSettings.churchCopyright:'',theme:i.theme,template:SlideTemplate.normalize(i.template),screen:i.slideScreens?.[index]||'',type:i.type,black:preserveBlanking&&output.black,clear:preserveBlanking&&output.clear};broadcast()}
  function move(dir){const i=current();if(!i)return false;if(index+dir>=0&&index+dir<i.slides.length){index+=dir}else{const n=service.items.indexOf(i)+dir;if(n<0||n>=service.items.length)return false;selected=service.items[n].id;index=dir>0?0:service.items[n].slides.length-1}render();return true}
  function advanceLive(){
   if(window.worshipWorkspace?.role==='editor')return;
@@ -1050,7 +1050,25 @@ if(mode==='audience'||mode==='stage'){
   if($('screensDialog').open)renderScreenSetup(displays);
  });
  window.worshipDesktop?.displays?.().then(displays=>{knownDisplays=displays}).catch(()=>{});
- $('screenSetup').onclick=()=>{$('screensDialog').showModal();renderScreenSetup()};
+ // Livestream overlay settings (Screens dialog). The installed app serves the overlay page for OBS.
+ const STREAM='worshipui.stream.v1',defaultStream={version:1,layout:'lower',show:'both',fontSize:56,background:'band',ccli:true};
+ function readStream(){const saved=read(STREAM,null);return saved&&saved.version===1?{...defaultStream,...saved}:{...defaultStream}}
+ async function renderStream(){
+  const settings=readStream();
+  $('streamLayout').value=settings.layout;$('streamShow').value=settings.show;$('streamBackground').value=settings.background;$('streamFontSize').value=String(settings.fontSize);$('streamCcli').checked=settings.ccli;
+  let info={error:'The livestream overlay is available in the installed app.'};
+  if(window.worshipDesktop?.streamInfo)try{info=await window.worshipDesktop.streamInfo()}catch{}
+  $('streamUrl').value=info.url||'';$('copyStreamUrl').disabled=$('previewStream').disabled=!info.url;
+  $('streamStatus').textContent=info.url?(settings.ccli&&!ccliSettings.streaming?'Add your CCLI Streaming License number in Settings to show it on song slides.':'Ready for OBS.'):info.error;
+ }
+ function saveStream(){
+  const settings={version:1,layout:$('streamLayout').value,show:$('streamShow').value,fontSize:Number($('streamFontSize').value),background:$('streamBackground').value,ccli:$('streamCcli').checked};
+  try{workspaceStorage.setItem(STREAM,JSON.stringify(settings));renderStream()}catch{$('streamStatus').textContent='Could not save the livestream settings on this device.'}
+ }
+ ['streamLayout','streamShow','streamBackground','streamFontSize','streamCcli'].forEach(id=>{$(id).onchange=saveStream});
+ $('copyStreamUrl').onclick=async()=>{try{if(window.worshipDesktop?.copyStreamUrl)await window.worshipDesktop.copyStreamUrl();else await navigator.clipboard.writeText($('streamUrl').value);$('streamStatus').textContent='Address copied. Paste it into the OBS Browser source.'}catch{$('streamUrl').select();$('streamStatus').textContent='Press Ctrl+C to copy the selected address.'}};
+ $('previewStream').onclick=()=>{if($('streamUrl').value)window.open($('streamUrl').value,'_blank')};
+ $('screenSetup').onclick=()=>{$('screensDialog').showModal();renderScreenSetup();renderStream()};
  $('closeScreens').onclick=()=>$('screensDialog').close();
  [['audience1Display','audience1'],['audience2Display','audience2'],['stageDisplay','stage']].forEach(([id,output])=>{$(id).onchange=()=>assignDisplay(output,$(id).value?Number($(id).value):undefined)});
  [['audience1Show',0,'screen1Show'],['audience2Show',1,'screen2Show']].forEach(([id,n,panel])=>{$(id).onchange=()=>{if(saveScreens(next=>{next.screens[n]={...next.screens[n],show:$(id).value};return next}))$(panel).value=$(id).value}});

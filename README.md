@@ -158,3 +158,19 @@ The app is ad-hoc signed, without an Apple Developer account, so each Mac approv
 4. If macOS says the app "is damaged", run `xattr -dr com.apple.quarantine /Applications/WorshipUI.app` in Terminal, then open it again.
 
 The Mac app has a standard menu bar, so Cmd+C, Cmd+V and Cmd+Q work. Fonts a Mac does not have, such as Segoe UI, fall back to the bundled Inter. Signing and notarizing with an Apple Developer account ($99/year) would remove the approval step.
+
+## Livestream with OBS (YouTube and Facebook Live)
+
+WorshipUI provides the lyrics and Scripture overlay. **OBS Studio** (free, obsproject.com) does the streaming: camera, sound, and sending to YouTube or Facebook.
+
+1. In WorshipUI choose **Screens → Livestream (OBS)**. Pick the layout (lower third or full screen), which language(s) to show, the background and the text size, then **Copy address**. The address looks like `http://127.0.0.1:48095/stream`.
+2. In OBS, add your camera: **Sources → + → Video Capture Device**.
+3. Add the overlay above the camera: **Sources → + → Browser**. Paste the address, set width **1920** and height **1080**, and leave the background transparent (the default).
+4. In OBS **Settings → Stream**, choose the service and paste its stream key:
+   - **YouTube:** YouTube Studio → **Create → Go live → Stream**, then copy the *Stream key*.
+   - **Facebook:** Facebook **Live Producer → Streaming software**, then copy the *Stream key*.
+5. Choose **Start Streaming** in OBS and run the service in WorshipUI as usual. The overlay follows Take live, Next/Space, Clear lyrics and Blackout.
+
+OBS streams to one service at a time. To go live on YouTube and Facebook together, use OBS's free "Multiple RTMP outputs" plugin or a relay service such as Restream.
+
+When **Show the CCLI Streaming License number** is on and the number is entered in **Settings → CCLI license registrations**, song slides show it in the corner of the stream, as CCLI requires for streamed lyrics. The overlay is served only to this computer (127.0.0.1) and only while the installed app is running.
