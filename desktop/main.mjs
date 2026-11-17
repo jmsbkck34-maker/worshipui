@@ -44,35 +44,29 @@ else {
    if(typeof url!=='string'||!/^https:\/\/www\.bible\.com\/bible\/[0-9]{1,5}\/[1-3A-Z]{3}\.[0-9]{1,3}\.[0-9]{1,3}(?:-[0-9]{1,3})?\.[A-Z0-9]{2,10}$/.test(url))throw Error('Unsupported YouVersion link');
    await shell.openExternal(url);
   });
-  // bible.com inside WorshipUI: a separate window (own browsing session, no preload, bible.com only) where the
-  // operator finds a passage; "Use these verses" reads the verses shown on that page.
-  let bibleWindow=null;
+  // Scripture from YouVersion: load the bible.com chapter in a hidden window (own browsing session, no preload,
+  // bible.com only), read the verses on the page, then close it. One page load per request from the operator.
   const bibleUrl=/^https:\/\/www\.bible\.com\/(?:[a-z]{2}(?:-[A-Z]{2})?\/)?bible\/[0-9]{1,5}\/[1-3A-Z]{3}\.[0-9]{1,3}(?:\.[0-9]{1,3}(?:-[0-9]{1,3})?)?\.[A-Za-z0-9-]{2,12}$/i;
-  ipcMain.handle('wui:open-bible',async(event,url)=>{
+  // Each verse is an element with data-usfm="JHN.3.16"; its text is in "*_content" parts, footnotes in "*_note".
+  const readVerses=`(()=>{const out={};for(const verse of document.querySelectorAll('[data-usfm]')){const id=verse.getAttribute('data-usfm');if(!/^[1-3A-Z]{3}\\.\\d+\\.\\d+$/.test(id))continue;let text='';for(const part of verse.querySelectorAll('[class$="_content"]')){if(!part.closest('[class$="_note"]'))text+=part.textContent}out[id]=((out[id]||'')+' '+text).replace(/\\s+/g,' ').trim()}return out})()`;
+  ipcMain.handle('wui:fetch-bible',async(event,url)=>{
    if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');
    if(typeof url!=='string'||!bibleUrl.test(url))throw Error('Unsupported YouVersion link');
-   if(!bibleWindow||bibleWindow.isDestroyed()){
-    bibleWindow=new BrowserWindow({title:'bible.com — WorshipUI',width:1000,height:800,autoHideMenuBar:true,webPreferences:{partition:'persist:bible',sandbox:true,contextIsolation:true,nodeIntegration:false}});
-    bibleWindow.webContents.setWindowOpenHandler(()=>({action:'deny'}));
-    bibleWindow.webContents.on('will-navigate',(navigation,target)=>{if(!/^https:\/\/www\.bible\.com\//.test(target))navigation.preventDefault()});
-    bibleWindow.on('closed',()=>{bibleWindow=null});
-   }
-   await bibleWindow.loadURL(url);bibleWindow.show();bibleWindow.focus();
-  });
-  ipcMain.handle('wui:capture-bible',async event=>{
-   if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');
-   if(!bibleWindow||bibleWindow.isDestroyed())throw Error('Open the passage in bible.com first.');
-   const url=bibleWindow.webContents.getURL();
-   // Each verse is an element with data-usfm="JHN.3.16"; its text is in "*_content" parts, footnotes in "*_note".
-   const verses=await bibleWindow.webContents.executeJavaScript(`(()=>{const out={};for(const verse of document.querySelectorAll('[data-usfm]')){const id=verse.getAttribute('data-usfm');if(!/^[1-3A-Z]{3}\\.\\d+\\.\\d+$/.test(id))continue;let text='';for(const part of verse.querySelectorAll('[class$="_content"]')){if(!part.closest('[class$="_note"]'))text+=part.textContent}out[id]=((out[id]||'')+' '+text).replace(/\\s+/g,' ').trim()}return out})()`);
-   const clean={};for(const [id,text] of Object.entries(verses||{}))if(typeof text==='string'&&text&&Object.keys(clean).length<500)clean[id]=text.slice(0,5000);
-   // The verses are in WorshipUI now, so close bible.com and return to the workspace.
-   if(Object.keys(clean).length){bibleWindow.close();main.focus()}
-   return {url,verses:clean};
-  });
-  ipcMain.handle('wui:close-bible',event=>{
-   if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');
-   if(bibleWindow&&!bibleWindow.isDestroyed())bibleWindow.close();
+   const hidden=new BrowserWindow({show:false,width:1000,height:800,webPreferences:{partition:'persist:bible',sandbox:true,contextIsolation:true,nodeIntegration:false}});
+   hidden.webContents.setWindowOpenHandler(()=>({action:'deny'}));
+   hidden.webContents.on('will-navigate',(navigation,target)=>{if(!/^https:\/\/www\.bible\.com\//.test(target))navigation.preventDefault()});
+   const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+   try{
+    await Promise.race([hidden.loadURL(url),wait(20000).then(()=>{throw Error('YouVersion did not respond. Check the internet connection and try again.')})]);
+    // The page may still be filling in its verses after it loads, so look for them for a few seconds.
+    for(let attempt=0;attempt<40;attempt++){
+     const verses=await hidden.webContents.executeJavaScript(readVerses);
+     const clean={};for(const [id,text] of Object.entries(verses||{}))if(typeof text==='string'&&text&&Object.keys(clean).length<500)clean[id]=text.slice(0,5000);
+     if(Object.keys(clean).length)return {url:hidden.webContents.getURL(),verses:clean};
+     await wait(250);
+    }
+    throw Error('No verses were found for that passage on YouVersion. Check the translation and try again.');
+   }finally{if(!hidden.isDestroyed())hidden.destroy()}
   });
   // Clipboard text for the YouVersion step (the page asks only while that step is active).
   ipcMain.handle('wui:read-clipboard',async event=>{

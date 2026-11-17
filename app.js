@@ -546,7 +546,9 @@ if(mode==='audience'||mode==='stage'){
  async function prepareBible(){
   const version=bibleVersion();renderSecondOption();
   $('youVersionTools').hidden=!usingYouVersion();
-  const inApp=!!window.worshipDesktop?.captureBible;$('youVersionStepFind').hidden=!inApp;$('youVersionStepUse').hidden=!inApp;
+  // Installed app: one button fetches the verses (bible.com stays hidden). Browser: open bible.com and copy.
+  const inApp=!!window.worshipDesktop?.fetchBible;$('youVersionStepCheck').hidden=!inApp;
+  $('openYouVersion').textContent=inApp?'Get verses from YouVersion':'Open passage in YouVersion';$('openYouVersion').classList?.toggle('primary',inApp);
   $('addBiblePassage').textContent=usingYouVersion()?'Add pasted passage':'Add selected passage';
   if(bibleData&&bibleDataId===version.id){fillBibleOptions('bibleBook',WorshipBible.books(mainLanguage()),$('bibleBook').value);updateBibleChapters();return}
   $('bibleStatus').textContent='Loading the '+version.id+'…';$('addBiblePassage').disabled=true;
@@ -558,7 +560,7 @@ if(mode==='audience'||mode==='stage'){
    $('bibleStatus').textContent='Choose a book, chapter and verse range. When editing, selection fills the item for review.';
   }catch(error){$('bibleStatus').textContent=error.message||'Could not load the '+version.id+'.'}
  }
- $('bibleVersion').onchange=()=>prepareBible();$('youVersionId').onchange=()=>{pastedAbbr='';prepareBible();renderYouVersionPreview()};
+ $('bibleVersion').onchange=()=>prepareBible();$('youVersionId').onchange=()=>{pastedAbbr='';if(captured){captured=null;$('youVersionText').value=''}prepareBible();renderYouVersionPreview()};
  // YouVersion flow: open the passage on bible.com; when the operator copies verses there and comes back,
  // the copied text is picked up, the passage selectors follow what was copied, and a preview shows the slides.
  let youVersionOpenedAt=0,clipboardBefore='',pastedAbbr='';
@@ -573,10 +575,13 @@ if(mode==='audience'||mode==='stage'){
   // Remember what was already on the clipboard so only newly copied verses are picked up.
   try{clipboardBefore=await readClipboard()}catch{clipboardBefore=''}
   youVersionOpenedAt=Date.now();
-  // Installed app: bible.com opens in a WorshipUI window showing the whole chapter, ready for "Use these verses".
-  if(window.worshipDesktop?.openBible){
-   $('bibleStatus').textContent='In the bible.com window, choose the translation, then click Use these verses.';
-   window.worshipDesktop.openBible(url.replace(/\.(\d+)\.\d+(?:-\d+)?\.([A-Za-z0-9]+)$/,'.$1.$2')).catch(error=>{$('bibleStatus').textContent=cleanError(error)||'Could not open YouVersion.'});
+  // Installed app: fetch the whole chapter from YouVersion in the background; the selectors choose the verses.
+  if(window.worshipDesktop?.fetchBible){
+   const reference=WorshipBible.bookName($('bibleBook').value)+' '+$('bibleChapter').value+':'+first+(last>first?'-'+last:'');
+   $('bibleStatus').textContent='Getting '+reference+' ('+youVersion().abbr+') from YouVersion…';$('openYouVersion').disabled=true;
+   try{applyBibleResult(await window.worshipDesktop.fetchBible(url.replace(/\.(\d+)\.\d+(?:-\d+)?\.([A-Za-z0-9]+)$/,'.$1.$2')))}
+   catch(error){$('bibleStatus').textContent=cleanError(error)||'Could not get the verses from YouVersion.'}
+   finally{$('openYouVersion').disabled=false}
    return;
   }
   $('bibleStatus').textContent='Copy the verses on bible.com, then come back to WorshipUI.';
@@ -622,7 +627,8 @@ if(mode==='audience'||mode==='stage'){
  let captured=null;
  // Write the captured verses for the selected range into the box in the "16 text 17 text" form the parser splits.
  function fillFromCapture(){
-  if(!captured||!usingYouVersion()||captured.book!==$('bibleBook').value||captured.chapter!==Number($('bibleChapter').value))return;
+  if(!captured||!usingYouVersion())return;
+  if(captured.book!==$('bibleBook').value||captured.chapter!==Number($('bibleChapter').value)){captured=null;$('youVersionText').value='';return}
   const first=Number($('bibleFirst').value),last=Math.max(first,Number($('bibleLast').value)),parts=[];
   for(let verse=first;verse<=last;verse++)if(captured.verses[verse])parts.push(verse+' '+captured.verses[verse]);
   if(!parts.length)return;
@@ -630,24 +636,21 @@ if(mode==='audience'||mode==='stage'){
   const known=WorshipBible.youVersions.find(v=>v.abbr===captured.abbr);
   if(known){$('youVersionId').value=known.abbr;pastedAbbr=''}else pastedAbbr=captured.abbr;
  }
- $('captureYouVersion').onclick=async()=>{
-  try{
-   const {url,verses}=await window.worshipDesktop.captureBible();
-   const page=String(url).match(/bible\/\d+\/([1-3A-Za-z]{3})\.(\d+)(?:\.(\d+)(?:-(\d+))?)?\.([A-Za-z0-9-]+)/i);
-   const book=page&&WorshipBible.usfmBook(page[1]);
-   if(!book)throw Error('Go to a Bible chapter in the bible.com window first.');
-   const chapter=Number(page[2]),prefix=page[1].toUpperCase()+'.'+chapter+'.',chapterVerses={};
-   for(const [id,text] of Object.entries(verses))if(id.startsWith(prefix))chapterVerses[Number(id.slice(prefix.length))]=text;
-   if(!Object.keys(chapterVerses).length)throw Error('No verses were found on that bible.com page. Wait for it to finish loading, then try again.');
-   captured={book,chapter,abbr:page[5].toUpperCase(),verses:chapterVerses};
-   // Follow the bible.com window if it moved to another chapter; a verse range in its address wins.
-   if($('bibleBook').value!==book||Number($('bibleChapter').value)!==chapter){$('bibleBook').value=book;updateBibleChapters();$('bibleChapter').value=String(chapter);updateBibleVerses()}
-   if(page[3]){$('bibleFirst').value=page[3];updateBibleVerses();$('bibleLast').value=page[4]||page[3]}
-   fillFromCapture();
-   $('bibleStatus').textContent=renderYouVersionPreview()?'Verses brought in from bible.com. Check the preview, then add the passage.':($('youVersionPreview').lastChild?.textContent||'');
-   if(!$('addBiblePassage').disabled)$('addBiblePassage').focus();
-  }catch(error){$('bibleStatus').textContent=cleanError(error)||'Could not read the bible.com window.'}
- };
+ // Use a chapter fetched from YouVersion: keep its verses, follow its book/chapter, and preview the chosen range.
+ function applyBibleResult({url,verses}){
+  const page=String(url).match(/bible\/\d+\/([1-3A-Za-z]{3})\.(\d+)(?:\.(\d+)(?:-(\d+))?)?\.([A-Za-z0-9-]+)/i);
+  const book=page&&WorshipBible.usfmBook(page[1]);
+  if(!book)throw Error('No verses were found for that passage on YouVersion. Check the translation and try again.');
+  const chapter=Number(page[2]),prefix=page[1].toUpperCase()+'.'+chapter+'.',chapterVerses={};
+  for(const [id,text] of Object.entries(verses))if(id.startsWith(prefix))chapterVerses[Number(id.slice(prefix.length))]=text;
+  if(!Object.keys(chapterVerses).length)throw Error('No verses were found for that passage on YouVersion. Check the translation and try again.');
+  captured={book,chapter,abbr:page[5].toUpperCase(),verses:chapterVerses};
+  if($('bibleBook').value!==book||Number($('bibleChapter').value)!==chapter){$('bibleBook').value=book;updateBibleChapters();$('bibleChapter').value=String(chapter);updateBibleVerses()}
+  if(page[3]){$('bibleFirst').value=page[3];updateBibleVerses();$('bibleLast').value=page[4]||page[3]}
+  fillFromCapture();
+  $('bibleStatus').textContent=renderYouVersionPreview()?'Verses ready. Check the preview, then add the passage.':($('youVersionPreview').lastChild?.textContent||'');
+  if(!$('addBiblePassage').disabled)$('addBiblePassage').focus();
+ }
  $('pasteYouVersion').onclick=async()=>{
   try{const text=await readClipboard();if(!text.trim()){$('bibleStatus').textContent='The clipboard is empty. Copy the verses on bible.com first.';return}$('bibleStatus').textContent=useCopiedText(text)?'Copied verses added. Check the preview, then add the passage.':$('youVersionPreview').lastChild?.textContent||''}
   catch{$('bibleStatus').textContent='Could not read the clipboard. Paste into the box instead (Ctrl+V).'}
@@ -692,7 +695,7 @@ if(mode==='audience'||mode==='stage'){
      const item={title,type:'Scripture',theme:'ember',slides,primaryVersion:versionId,...(fitted?{fitText:true}:{}),...(combined?{verseSlides:verses}:{}),
       ...(second?{secondaryVersion:second.id,secondarySlides:secondSlides,...(combined?{secondaryVerseSlides:secondVerses}:{})}:{})};
      if(window.worshipWorkspace.addItems([item])){
-      $('itemDialog').close();$('youVersionText').value='';captured=null;window.worshipDesktop?.closeBible?.().catch(()=>{});toast(title+(second?' with '+second.id:'')+' added to the service.');
+      $('itemDialog').close();$('youVersionText').value='';captured=null;toast(title+(second?' with '+second.id:'')+' added to the service.');
      }
     }
   }catch(error){$('bibleStatus').textContent=error.message||'Could not add that passage.'}

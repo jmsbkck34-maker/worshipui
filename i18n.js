@@ -166,6 +166,10 @@
   'Assign a display to at least one output first.':'Primero asigna un monitor a al menos una salida.',
   'On bible.com, select the verses and choose Copy.':'En bible.com, selecciona los versículos y elige Copiar.',
   'Come back here — the copied verses are picked up automatically.':'Regresa aquí: los versículos copiados se toman automáticamente.','Paste from clipboard':'Pegar del portapapeles',
+  'Get verses from YouVersion':'Obtener versículos de YouVersion','Check the preview below, then add the passage.':'Revisa la vista previa abajo y luego agrega el pasaje.',
+  'Verses ready. Check the preview, then add the passage.':'Versículos listos. Revisa la vista previa y agrega el pasaje.','Could not get the verses from YouVersion.':'No se pudieron obtener los versículos de YouVersion.',
+  'YouVersion did not respond. Check the internet connection and try again.':'YouVersion no respondió. Revisa la conexión a internet e inténtalo de nuevo.',
+  'No verses were found for that passage on YouVersion. Check the translation and try again.':'No se encontraron versículos para ese pasaje en YouVersion. Revisa la traducción e inténtalo de nuevo.',
   'In the bible.com window, go to the chapter and translation you want.':'En la ventana de bible.com, ve al capítulo y la traducción que quieras.','Use these verses':'Usar estos versículos',
   'brings in the verses chosen above from the bible.com window.':'trae los versículos elegidos arriba desde la ventana de bible.com.',
   'Or copy verses on bible.com and come back — they are picked up automatically.':'O copia versículos en bible.com y regresa: se toman automáticamente.',
@@ -239,6 +243,7 @@
   [/^Delete the setlist for (.+) from this computer\? A recovery copy is kept \(Download recovery\), and a copy already shared to the server stays there\.$/,'¿Eliminar el servicio del $1 de este equipo? Se guarda una copia de recuperación (Descargar recuperación) y la copia ya compartida en el servidor se conserva.']);
  patterns.push([/^Display (\d+) · (\S+)( \(main\))?$/,(m,n,size,main)=>'Monitor '+n+' · '+size+(main?' (principal)':'')],
   [/^(\d+) displays connected\.$/,'$1 monitores conectados.'],[/^(\d+) screens? opened\.$/,(m,n)=>n+(n==='1'?' pantalla abierta.':' pantallas abiertas.')]);
+ patterns.push([/^Getting (.+) \((\S+)\) from YouVersion…$/,'Obteniendo $1 ($2) de YouVersion…']);
  const SKIP='.screen, textarea, input, #order strong, #selectedTitle, #songResults, #versionList, #changeList, pre, #churchName[data-custom]';
  const originals=new WeakMap(),attributes=new WeakMap(),ATTRS=['placeholder','aria-label','title'];
  let language='en',observer=null,applying=false,translated=false;
