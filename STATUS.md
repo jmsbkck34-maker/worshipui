@@ -1,10 +1,11 @@
 # WorshipUI status — 2026-11-16
 
-Branch: `work/setlist-history-20261116` (version 0.3.4). Automated tests: 34 passing (`npm test`).
+Branch: `work/setlist-history-20261116` (version 0.3.4). Automated tests: 36 passing (`npm test`).
 
 ## Working in the demo
 
 - **Livestream (OBS):** Screens → Livestream (OBS) gives an overlay address (http://127.0.0.1:48095/stream) to add in OBS as a Browser source over the camera, for YouTube or Facebook Live. It has a lower-third or full-screen layout and a language choice, follows Take live, Blackout and Clear, and shows the CCLI Streaming License number on songs. Verified in the installed app (overlay updates). An option allows OBS on another computer on the network, using an address with an access key (tested in the automated tests over this PC's network address; not yet with a second computer). OBS itself is not tested here; setup steps are in the README.
+- **Images and video items:** Add item → Images and video → Add images or videos (installed app). Each file is a slide, stored in the app's media folder (up to 2 GB per file). Videos play with sound on audience screens and silently on the live monitor, with Pause/Play video by the live controls. Save to folder copies the media into a "WorshipUI media" folder beside the setlist file, and Open from folder brings it back. Media serving was verified in the installed app; video playback on a projector has not been tested.
 - **Countdown items:** Add item → Countdown, either a length of time or a clock time, with text above the timer. At zero it stays on 0:00, shows a message or goes to the next item. It runs on the audience, stage and preview screens and on the livestream overlay.
 - **Slide editing:** drag slides to reorder them, or use ◀ Move / Move ▶, Duplicate slide (for example to repeat a chorus) and Delete slide. Section labels, screen targets and second translations move with their slides, and the live slide stays correct.
 - **Licensed Bible versions (Settings):** import a text file for a version the church is licensed to use (for example NIV). It is stored only in the desktop app data folder, never in services, sync, backups or Git, and appears under Version when adding Scripture. Includes links to publisher permission pages and API sign-ups. Not tested in the installed app yet; tested with a stand-in in the automated tests.
@@ -40,7 +41,7 @@ Branch: `work/setlist-history-20261116` (version 0.3.4). Automated tests: 34 pas
 
 ## Requested, not built
 
-- **Media:** PowerPoint import (with animations when PowerPoint is installed), timed slides, background music. Waiting on a decision: keep media on the computer it was added to until a shared server host is chosen?
+- **Media:** PowerPoint import, and slides timed to a song (audio file plus recorded timings; auto-advance). Waiting on a decision: keep media on the computer it was added to until a shared server host is chosen?
 - **Machine translation** of non-Scripture text. Needs a provider choice (for example Azure Translator).
 - **Shared server:** deleting a setlist there (deletion is local only today), recent-setlist history, a shared song library.
 - **NET Bible:** headings are fused into the verse text in the downloaded file, so it was not imported.

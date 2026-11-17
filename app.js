@@ -26,7 +26,7 @@ function readBranding(){
  const record=read(BRANDING,null);
  return SlideTemplate.validBrandingRecord(record)?record:{version:1,branding:{...SlideTemplate.emptyBranding},baseRevision:0,baseBranding:null};
 }
-function valid(s){return s&&typeof s.title==='string'&&s.title.length<=100&&Array.isArray(s.items)&&s.items.length<=200&&s.items.every(i=>i&&typeof i.id==='string'&&typeof i.title==='string'&&i.title.length<=100&&['Song','Scripture','Announcement','Sermon','Countdown'].includes(i.type)&&(i.type==='Countdown'?SlideTemplate.validCountdown(i.countdown):i.countdown===undefined)&&themes.includes(i.theme)&&SlideTemplate.validTemplate(i.template)&&Array.isArray(i.slides)&&i.slides.length>0&&i.slides.length<=200&&i.slides.every(t=>typeof t==='string'&&t.length<=20000)&&validTranslations(i)&&(i.sectionLabels===undefined||i.type==='Song'&&Array.isArray(i.sectionLabels)&&i.sectionLabels.length===i.slides.length&&i.sectionLabels.every(label=>typeof label==='string'&&label.length<=50))&&validSlideScreens(i))&&new Set(s.items.map(i=>i.id)).size===s.items.length}
+function valid(s){return s&&typeof s.title==='string'&&s.title.length<=100&&Array.isArray(s.items)&&s.items.length<=200&&s.items.every(i=>i&&typeof i.id==='string'&&typeof i.title==='string'&&i.title.length<=100&&['Song','Scripture','Announcement','Sermon','Countdown','Media'].includes(i.type)&&(i.type==='Countdown'?SlideTemplate.validCountdown(i.countdown):i.countdown===undefined)&&(i.type==='Media'?SlideTemplate.validMediaItem(i):i.media===undefined)&&themes.includes(i.theme)&&SlideTemplate.validTemplate(i.template)&&Array.isArray(i.slides)&&i.slides.length>0&&i.slides.length<=200&&i.slides.every(t=>typeof t==='string'&&t.length<=20000)&&validTranslations(i)&&(i.sectionLabels===undefined||i.type==='Song'&&Array.isArray(i.sectionLabels)&&i.sectionLabels.length===i.slides.length&&i.sectionLabels.every(label=>typeof label==='string'&&label.length<=50))&&validSlideScreens(i))&&new Set(s.items.map(i=>i.id)).size===s.items.length}
 function validDate(value){if(!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value))return false;const date=new Date(value+'T00:00:00Z');return Number.isFinite(date.getTime())&&date.toISOString().slice(0,10)===value}
 function validLibrary(value){
  return value&&value.version===1&&typeof value.active==='string'&&value.entries&&typeof value.entries==='object'&&!Array.isArray(value.entries)&&Object.hasOwn(value.entries,value.active)&&
@@ -43,7 +43,7 @@ function storeService(next){
 }
 let selected=service.items[0]?.id,index=0,editing=false,output=read(LIVE,{text:'',next:'',theme:'midnight',black:false,clear:false});
 const mode=new URLSearchParams(location.search).get('view');
-function safeOutput(o){const optionalText=value=>value===undefined||typeof value==='string'&&value.length<=20000;return o&&typeof o.text==='string'&&typeof o.next==='string'&&themes.includes(o.theme)&&typeof o.black==='boolean'&&typeof o.clear==='boolean'&&(o.fitText===undefined||typeof o.fitText==='boolean')&&SlideTemplate.validTemplate(o.template)&&optionalText(o.secondaryText)&&optionalText(o.nextSecondaryText)&&optionalText(o.primaryVersion)&&optionalText(o.secondaryVersion)&&optionalText(o.ccliFooter)&&(o.screen===undefined||SCREEN_TARGETS.includes(o.screen))&&(o.type===undefined||['Song','Scripture','Announcement','Sermon','Countdown'].includes(o.type))&&(o.countdown===undefined||SlideTemplate.validLiveCountdown(o.countdown))}
+function safeOutput(o){const optionalText=value=>value===undefined||typeof value==='string'&&value.length<=20000;return o&&typeof o.text==='string'&&typeof o.next==='string'&&themes.includes(o.theme)&&typeof o.black==='boolean'&&typeof o.clear==='boolean'&&(o.fitText===undefined||typeof o.fitText==='boolean')&&SlideTemplate.validTemplate(o.template)&&optionalText(o.secondaryText)&&optionalText(o.nextSecondaryText)&&optionalText(o.primaryVersion)&&optionalText(o.secondaryVersion)&&optionalText(o.ccliFooter)&&(o.screen===undefined||SCREEN_TARGETS.includes(o.screen))&&(o.type===undefined||['Song','Scripture','Announcement','Sermon','Countdown','Media'].includes(o.type))&&(o.media===undefined||SlideTemplate.validMediaEntry(o.media))&&(o.paused===undefined||typeof o.paused==='boolean')&&(o.countdown===undefined||SlideTemplate.validLiveCountdown(o.countdown))}
 if(!safeOutput(output))output={text:'',next:'',theme:'midnight',black:false,clear:false};
 let ccliSettings={...emptyCcliSettings},ccliSettingsError='';
 try{
@@ -109,6 +109,18 @@ function paint(el,text,theme,black=false,template,options={}){
  const position=SlideTemplate.textPosition(template);
  if(position)el.className+=' text-positioned';
  ['--text-x','--text-y','--text-width'].forEach((name,n)=>position?el.style.setProperty(name,[position.x,position.y,position.width][n]+'%'):el.style.setProperty(name,''));
+ if(!black&&options.media){
+  const media=options.media,existing=el.querySelector?.('.slide-media');
+  if(!(existing&&existing.mediaFile===media.file)){
+   el.replaceChildren();
+   const node=document.createElement(media.kind==='video'?'video':'img');node.className='slide-media';node.mediaFile=media.file;node.src='/media/'+media.file;
+   if(media.kind==='video'){node.preload='metadata';node.playsInline=true;node.muted=!options.withSound;if(options.play)node.autoplay=true}else node.alt='';
+   el.append(node);
+  }
+  const video=el.querySelector?.('video.slide-media');
+  if(video&&options.play){if(options.paused)video.pause();else video.play?.().catch(()=>{})}
+  el.fitScripture=false;return;
+ }
  slideContent(el,black?'':text,black?{}:options);
  if(black&&options.blackoutLogo){const logo=document.createElement('img');logo.className='blackout-logo';logo.alt='';logo.src=options.blackoutLogo;el.append(logo)}
  el.fitScripture=!black&&!!options.fitText;scheduleFit();
@@ -140,7 +152,7 @@ function renderOutput(){
  if(mode==='audience'&&(!output.screen||output.screen===screenNumber))screenContent=output;
  let shown=mode==='audience'?languageView(screenContent,readScreens().screens[Number(screenNumber)-1].show):output;
  if(shown.countdown)shown={...shown,text:SlideTemplate.countdownText(shown.countdown,Date.now()),secondaryText:''};
- const options={secondaryText:shown.secondaryText||'',primaryVersion:shown.primaryVersion||'',secondaryVersion:shown.secondaryVersion||'',ccliFooter:shown.ccliFooter||'',fitText:!!shown.fitText};
+ const options={secondaryText:shown.secondaryText||'',primaryVersion:shown.primaryVersion||'',secondaryVersion:shown.secondaryVersion||'',ccliFooter:shown.ccliFooter||'',fitText:!!shown.fitText,...(shown.media?{media:shown.media,play:true,paused:!!shown.paused,withSound:mode==='audience'}:{})};
  if(output.black){const branding=readBranding().branding;if(branding.showOnBlackout&&branding.logo)options.blackoutLogo=branding.logo}
  if(mode==='audience'){paint($('outputText'),output.clear?'':shown.text,shown.theme,output.black,shown.template,output.clear?{}:options)}
  else if(mode==='stage'){
@@ -152,6 +164,7 @@ function renderOutput(){
   $('stageState').textContent=output.black?'AUDIENCE BLACKED OUT':output.clear?'AUDIENCE LYRICS CLEARED':'CURRENT SLIDE';
  }else{
   paint($('live'),output.clear?'':shown.text,output.theme,output.black,output.template,output.clear?{}:options);
+  $('videoToggle').hidden=output.media?.kind!=='video';$('videoToggle').textContent=output.paused?'Play video':'Pause video';
   $('liveStatus').textContent=output.black?'BLACKOUT':output.clear?'TEXT CLEARED':output.text?'ON SCREEN':'READY';$('blackout').setAttribute('aria-pressed',String(output.black));
  }
 }
@@ -171,7 +184,7 @@ if(mode==='audience'||mode==='stage'){
 }else{
  // Two clicks on the same slide within 450 ms put it live (each click redraws the cards, so native dblclick is unreliable).
  let lastSlideClick=null;
- function render(){const item=current();$('serviceTitle').value=service.title;$('itemCount').textContent=service.items.length+' ITEMS';$('order').replaceChildren();service.items.forEach((i,n)=>{const row=document.createElement('div'),b=document.createElement('button');b.className='order-item'+(i.id===selected?' active':'');b.setAttribute('aria-current',String(i.id===selected));const num=document.createElement('span');num.className='number';num.textContent=String(n+1).padStart(2,'0');const txt=document.createElement('span'),title=document.createElement('strong'),meta=document.createElement('small');title.textContent=i.title;meta.textContent=i.type+' · '+i.slides.length+' slides';txt.append(title,meta);b.append(num,txt);b.onclick=()=>{selected=i.id;index=0;render()};row.append(b);if(i.id===selected){const controls=document.createElement('div');controls.className='reorder';[-1,1].forEach(dir=>{const move=document.createElement('button');move.textContent=dir<0?'↑ Move up':'↓ Move down';move.disabled=n+dir<0||n+dir>=service.items.length;move.onclick=()=>{[service.items[n],service.items[n+dir]]=[service.items[n+dir],service.items[n]];persist();render()};controls.append(move)});row.append(controls)}$('order').append(row)});$('selectedTitle').textContent=item?.title||'Build your service';$('itemType').textContent=item?.type||'Start with a song or welcome';$('edit').disabled=!item;$('take').disabled=!item;$('slides').replaceChildren();const slideOptions=(slideIndex)=>({secondaryText:item?.secondarySlides?.[slideIndex]||'',primaryVersion:item?.primaryVersion||'',secondaryVersion:item?.secondaryVersion||'',ccliFooter:item?.type==='Song'&&ccliSettings.churchCopyright?'CCLI License #'+ccliSettings.churchCopyright:''});if(item)item.slides.forEach((text,n)=>{const b=document.createElement('button');b.className='slide-card'+(index===n?' selected':'');b.setAttribute('aria-label','Preview slide '+(n+1));b.setAttribute('aria-pressed',String(index===n));const s=document.createElement('div');paint(s,text,item.theme,false,item.template,slideOptions(n));const caption=document.createElement('div');caption.className='slide-caption';caption.textContent='SLIDE '+String(n+1).padStart(2,'0')+(index===n?' · SELECTED':'');b.append(s,caption);b.onclick=()=>{const now=Date.now(),double=lastSlideClick?.id===item.id&&lastSlideClick.n===n&&now-lastSlideClick.at<450;lastSlideClick=double?null:{id:item.id,n,at:now};index=n;render();if(double)take()};$('slides').append(b)});paint($('preview'),item?.slides[index]||'Add your first service item',item?.theme||'midnight',false,item?.template,item?slideOptions(index):{});$('themes').replaceChildren();themes.forEach(theme=>{const b=document.createElement('button');b.className=theme+(item?.theme===theme?' chosen':'');b.title=theme;b.setAttribute('aria-label',theme+' background');b.disabled=!item;b.onclick=()=>{item.theme=theme;item.template={...SlideTemplate.normalize(item.template),backgroundType:'preset'};persist();render()};$('themes').append(b)});$('ready').textContent=service.items.length?service.items.length+' items · '+service.items.reduce((n,i)=>n+i.slides.length,0)+' slides saved locally. Check text size and your projector before starting.':'Your service is empty. Add an item to begin.';renderTemplateControls(item);renderOutput();if(window.worshipWorkspace)window.worshipWorkspace.setRole(window.worshipWorkspace.role)}
+ function render(){const item=current();$('serviceTitle').value=service.title;$('itemCount').textContent=service.items.length+' ITEMS';$('order').replaceChildren();service.items.forEach((i,n)=>{const row=document.createElement('div'),b=document.createElement('button');b.className='order-item'+(i.id===selected?' active':'');b.setAttribute('aria-current',String(i.id===selected));const num=document.createElement('span');num.className='number';num.textContent=String(n+1).padStart(2,'0');const txt=document.createElement('span'),title=document.createElement('strong'),meta=document.createElement('small');title.textContent=i.title;meta.textContent=i.type+' · '+i.slides.length+' slides';txt.append(title,meta);b.append(num,txt);b.onclick=()=>{selected=i.id;index=0;render()};row.append(b);if(i.id===selected){const controls=document.createElement('div');controls.className='reorder';[-1,1].forEach(dir=>{const move=document.createElement('button');move.textContent=dir<0?'↑ Move up':'↓ Move down';move.disabled=n+dir<0||n+dir>=service.items.length;move.onclick=()=>{[service.items[n],service.items[n+dir]]=[service.items[n+dir],service.items[n]];persist();render()};controls.append(move)});row.append(controls)}$('order').append(row)});$('selectedTitle').textContent=item?.title||'Build your service';$('itemType').textContent=item?.type||'Start with a song or welcome';$('edit').disabled=!item;$('take').disabled=!item;$('slides').replaceChildren();const slideOptions=(slideIndex)=>({...(item?.media?.[slideIndex]?{media:item.media[slideIndex]}:{}),secondaryText:item?.secondarySlides?.[slideIndex]||'',primaryVersion:item?.primaryVersion||'',secondaryVersion:item?.secondaryVersion||'',ccliFooter:item?.type==='Song'&&ccliSettings.churchCopyright?'CCLI License #'+ccliSettings.churchCopyright:''});if(item)item.slides.forEach((text,n)=>{const b=document.createElement('button');b.className='slide-card'+(index===n?' selected':'');b.setAttribute('aria-label','Preview slide '+(n+1));b.setAttribute('aria-pressed',String(index===n));const s=document.createElement('div');paint(s,text,item.theme,false,item.template,slideOptions(n));const caption=document.createElement('div');caption.className='slide-caption';caption.textContent='SLIDE '+String(n+1).padStart(2,'0')+(index===n?' · SELECTED':'');b.append(s,caption);b.onclick=()=>{const now=Date.now(),double=lastSlideClick?.id===item.id&&lastSlideClick.n===n&&now-lastSlideClick.at<450;lastSlideClick=double?null:{id:item.id,n,at:now};index=n;render();if(double)take()};$('slides').append(b)});paint($('preview'),item?.slides[index]||'Add your first service item',item?.theme||'midnight',false,item?.template,item?slideOptions(index):{});$('themes').replaceChildren();themes.forEach(theme=>{const b=document.createElement('button');b.className=theme+(item?.theme===theme?' chosen':'');b.title=theme;b.setAttribute('aria-label',theme+' background');b.disabled=!item;b.onclick=()=>{item.theme=theme;item.template={...SlideTemplate.normalize(item.template),backgroundType:'preset'};persist();render()};$('themes').append(b)});$('ready').textContent=service.items.length?service.items.length+' items · '+service.items.reduce((n,i)=>n+i.slides.length,0)+' slides saved locally. Check text size and your projector before starting.':'Your service is empty. Add an item to begin.';renderTemplateControls(item);renderOutput();if(window.worshipWorkspace)window.worshipWorkspace.setRole(window.worshipWorkspace.role)}
  const renderWorkspace=render;
  render=function(){
   renderWorkspace();
@@ -199,7 +212,7 @@ if(mode==='audience'||mode==='stage'){
  // Reordering, duplicating and deleting slides. Everything stored per slide (section labels, screen targets,
  // the second translation) moves with its slide; the live slide keeps pointing at the same slide.
  let dragFrom=null;
- const PER_SLIDE=['slides','sectionLabels','slideScreens','secondarySlides'];
+ const PER_SLIDE=['slides','sectionLabels','slideScreens','secondarySlides','media'];
  function changeSlides(change,newIndex){
   const item=current();if(!item)return false;
   const before=structuredClone(item),order=change([...item.slides.keys()]);
@@ -412,7 +425,7 @@ if(mode==='audience'||mode==='stage'){
  };
  let livePosition=null;
  function broadcast(){if(window.worshipWorkspace?.role==='editor')return;try{workspaceStorage.setItem(LIVE,JSON.stringify(output))}catch{toast('Cannot connect output windows: browser storage is unavailable.')}renderOutput();if(!mode&&window.worshipWorkspace)window.worshipWorkspace.setRole(window.worshipWorkspace.role)}
- function take(preserveBlanking=false){if(window.worshipWorkspace?.role==='editor')return;const i=current();if(!i)return;livePosition={id:i.id,index};output={text:i.slides[index],next:i.slides[index+1]||'',secondaryText:i.secondarySlides?.[index]||'',nextSecondaryText:i.secondarySlides?.[index+1]||'',primaryVersion:i.primaryVersion||'',secondaryVersion:i.secondaryVersion||'',fitText:!!i.fitText,ccliFooter:i.type==='Song'&&ccliSettings.churchCopyright?'CCLI License #'+ccliSettings.churchCopyright:'',theme:i.theme,template:SlideTemplate.normalize(i.template),screen:i.slideScreens?.[index]||'',type:i.type,...(i.type==='Countdown'?{countdown:{target:SlideTemplate.countdownTarget(i.countdown,Date.now()),message:i.countdown.message,end:i.countdown.end,endMessage:i.countdown.endMessage}}:{}),black:preserveBlanking&&output.black,clear:preserveBlanking&&output.clear};broadcast()}
+ function take(preserveBlanking=false){if(window.worshipWorkspace?.role==='editor')return;const i=current();if(!i)return;livePosition={id:i.id,index};output={text:i.slides[index],next:i.slides[index+1]||'',secondaryText:i.secondarySlides?.[index]||'',nextSecondaryText:i.secondarySlides?.[index+1]||'',primaryVersion:i.primaryVersion||'',secondaryVersion:i.secondaryVersion||'',fitText:!!i.fitText,ccliFooter:i.type==='Song'&&ccliSettings.churchCopyright?'CCLI License #'+ccliSettings.churchCopyright:'',theme:i.theme,template:SlideTemplate.normalize(i.template),screen:i.slideScreens?.[index]||'',type:i.type,...(i.media?.[index]?{media:i.media[index],paused:false}:{}),...(i.type==='Countdown'?{countdown:{target:SlideTemplate.countdownTarget(i.countdown,Date.now()),message:i.countdown.message,end:i.countdown.end,endMessage:i.countdown.endMessage}}:{}),black:preserveBlanking&&output.black,clear:preserveBlanking&&output.clear};broadcast()}
  function move(dir){const i=current();if(!i)return false;if(index+dir>=0&&index+dir<i.slides.length){index+=dir}else{const n=service.items.indexOf(i)+dir;if(n<0||n>=service.items.length)return false;selected=service.items[n].id;index=dir>0?0:service.items[n].slides.length-1}render();return true}
  function advanceLive(){
   if(window.worshipWorkspace?.role==='editor')return;
@@ -423,6 +436,7 @@ if(mode==='audience'||mode==='stage'){
   selected=liveItem.id;index=livePosition.index;
   if(move(1))take(true);else{selected=previousSelected;index=previousIndex;toast('Already at the end of the service.')}
  }
+ $('videoToggle').onclick=()=>{if(!output.media||output.media.kind!=='video'||window.worshipWorkspace?.role==='editor')return;output.paused=!output.paused;broadcast()};
  $('take').onclick=()=>take();$('next').onclick=()=>move(1);$('previous').onclick=()=>move(-1);$('clear').onclick=()=>{if(window.worshipWorkspace?.role==='editor')return;output.clear=!output.clear;broadcast()};$('blackout').onclick=()=>{if(window.worshipWorkspace?.role==='editor')return;output.black=!output.black;broadcast()};
  $('serviceTitle').oninput=e=>{service.title=e.target.value;persist()};
  const SONGS='worshipui.songs.v1';
@@ -797,9 +811,9 @@ if(mode==='audience'||mode==='stage'){
     }
   }catch(error){$('bibleStatus').textContent=error.message||'Could not add that passage.'}
  };
- function openEditor(isEdit){editing=isEdit;chosenSongStyle=null;chosenSongSlides=null;chosenScriptureFit=null;chosenVerseSlides=null;chosenSecondVerseSlides=null;addSecondLanguage=false;captured=null;$('fillSecondStatus').textContent='';const i=isEdit?current():null;$('dialogTitle').textContent=isEdit?'Edit service item':'Add to your service';$('titleInput').value=i?.title||'';$('typeInput').value=i?.type||'Song';$('textInput').value=i?.slides.join('\n\n')||'';$('itemPrimaryVersion').value=i?.primaryVersion||'';$('itemSecondaryVersion').value=i?.secondaryVersion||'';$('itemSecondaryText').value=i?.secondarySlides?.join('\n\n')||'';$('songSearch').value='';$('delete').hidden=!isEdit;fillCountdownFields(i?.type==='Countdown'?i.countdown:null);updateItemTranslationFields();renderSongs();$('itemDialog').showModal()}
+ function openEditor(isEdit){editing=isEdit;chosenSongStyle=null;chosenSongSlides=null;chosenScriptureFit=null;chosenVerseSlides=null;chosenSecondVerseSlides=null;addSecondLanguage=false;captured=null;$('fillSecondStatus').textContent='';const i=isEdit?current():null;$('dialogTitle').textContent=isEdit?'Edit service item':'Add to your service';$('titleInput').value=i?.title||'';$('typeInput').value=i?.type||'Song';$('textInput').value=i?.slides.join('\n\n')||'';$('itemPrimaryVersion').value=i?.primaryVersion||'';$('itemSecondaryVersion').value=i?.secondaryVersion||'';$('itemSecondaryText').value=i?.secondarySlides?.join('\n\n')||'';$('songSearch').value='';$('delete').hidden=!isEdit;fillCountdownFields(i?.type==='Countdown'?i.countdown:null);mediaDraft=i?.type==='Media'?structuredClone(i.media):[];updateItemTranslationFields();renderSongs();$('itemDialog').showModal()}
  $('add').onclick=()=>openEditor(false);$('edit').onclick=()=>openEditor(true);$('cancel').onclick=()=>$('itemDialog').close();
- function updateItemTranslationFields(){const type=$('typeInput').value;$('countdownFields').hidden=type!=='Countdown';$('textInputRow').hidden=type==='Countdown';$('textInput').required=type!=='Countdown';renderCountdownFields();$('translationFields').hidden=type!=='Scripture';$('bibleTools').hidden=type!=='Scripture';$('songTools').hidden=type!=='Song';$('saveSongTemplate').hidden=type!=='Song';$('titleInput').required=type!=='Scripture';$('titleLabel').textContent=type==='Scripture'?'Title (optional)':'Title';if(type==='Scripture')return prepareBible()}
+ function updateItemTranslationFields(){const type=$('typeInput').value;$('countdownFields').hidden=type!=='Countdown';$('mediaFields').hidden=type!=='Media';$('textInputRow').hidden=type==='Countdown'||type==='Media';$('textInput').required=type!=='Countdown'&&type!=='Media';renderMediaDraft();renderCountdownFields();$('translationFields').hidden=type!=='Scripture';$('bibleTools').hidden=type!=='Scripture';$('songTools').hidden=type!=='Song';$('saveSongTemplate').hidden=type!=='Song';$('titleInput').required=type!=='Scripture';$('titleLabel').textContent=type==='Scripture'?'Title (optional)':'Title';if(type==='Scripture')return prepareBible()}
  $('typeInput').onchange=updateItemTranslationFields;
  // Countdown editor: a length of time or a clock time, text above the timer, and what happens at zero.
  function renderCountdownFields(){
@@ -807,6 +821,23 @@ if(mode==='audience'||mode==='stage'){
   $('countdownMinutesRow').hidden=clock;$('countdownSecondsRow').hidden=clock;$('countdownTimeRow').hidden=!clock;
   $('countdownEndMessageRow').hidden=$('countdownEnd').value!=='message';
  }
+ // Images & video editor: the chosen files, in order; each becomes a slide named after the file.
+ let mediaDraft=[];
+ function renderMediaDraft(){
+  const list=$('mediaList');list.replaceChildren();
+  $('addMedia').disabled=!window.worshipDesktop?.importMedia;
+  if(!window.worshipDesktop?.importMedia)$('mediaStatus').textContent='Images and videos can be added in the installed app.';
+  mediaDraft.forEach((entry,n)=>{
+   const row=document.createElement('div');row.className='media-row';
+   const name=document.createElement('span');name.textContent=(entry.kind==='video'?'▶ ':'🖼 ')+entry.name;
+   const remove=document.createElement('button');remove.type='button';remove.textContent='Remove';remove.onclick=()=>{mediaDraft.splice(n,1);renderMediaDraft()};
+   row.append(name,remove);list.append(row);
+  });
+ }
+ $('addMedia').onclick=async()=>{
+  try{const added=await window.worshipDesktop.importMedia();mediaDraft=[...mediaDraft,...added].slice(0,200);renderMediaDraft();if(added.length)$('mediaStatus').textContent=added.length+' added. Save the item to use them.'}
+  catch(error){$('mediaStatus').textContent=String(error.message||'').replace(/^Error invoking remote method '[^']+': (Error: )?/,'')||'Could not add those files.'}
+ };
  $('countdownMode').onchange=renderCountdownFields;$('countdownEnd').onchange=renderCountdownFields;
  function fillCountdownFields(countdown){
   const c=countdown||{mode:'duration',seconds:300,message:'',end:'zero',endMessage:''};
@@ -822,6 +853,10 @@ if(mode==='audience'||mode==='stage'){
  $('itemForm').onsubmit=e=>{
   e.preventDefault();const type=$('typeInput').value,title=$('titleInput').value.trim()||(type==='Scripture'?'Scripture':type==='Countdown'?'Countdown':'');
   let slides=$('textInput').value.trim().split(/\n\s*\n/).filter(Boolean),countdown=null;
+  if(type==='Media'){
+   if(!mediaDraft.length){toast('Add at least one image or video.');return}
+   slides=mediaDraft.map(entry=>entry.name);
+  }
   if(type==='Countdown'){
    countdown=countdownFromFields();
    if(!SlideTemplate.validCountdown(countdown)){toast('Set a countdown between 1 second and 24 hours, or a clock time.');return}
@@ -829,7 +864,7 @@ if(mode==='audience'||mode==='stage'){
   }
   if(!slides.length||slides.length>200||slides.some(text=>text.length>20000)||!title){toast('Enter a title (optional for Scripture) and 1–200 slides, with fewer than 20,000 characters per slide.');return}
   if(!editing&&service.items.length>=200){toast('This service has reached the 200-item limit.');return}
-  const item={title,type,slides,...(countdown?{countdown}:{})};
+  const item={title:title||(type==='Media'?'Images & video':''),type,slides,...(countdown?{countdown}:{}),...(type==='Media'?{media:structuredClone(mediaDraft)}:{})};
   if(type==='Song'){
    const source=chosenSongStyle?{slides:chosenSongSlides,sectionLabels:chosenSongStyle.sectionLabels}:editing&&current()?.type==='Song'?current():null;
    const labels=source&&remapSectionLabels(source.slides,source.sectionLabels,slides);
@@ -855,7 +890,7 @@ if(mode==='audience'||mode==='stage'){
    }
   }
   if(editing&&current()?.slideScreens&&current().slides.length===item.slides.length)item.slideScreens=current().slideScreens;
-  if(editing){const existing=current();Object.assign(existing,item);if(type==='Song'&&chosenSongStyle){existing.theme=chosenSongStyle.theme;if(chosenSongStyle.template)existing.template=chosenSongStyle.template;else delete existing.template}['primaryVersion','secondaryVersion','secondarySlides','sectionLabels','fitText','verseSlides','secondaryVerseSlides','slideScreens','countdown'].forEach(key=>{if(item[key]===undefined)delete existing[key]})}
+  if(editing){const existing=current();Object.assign(existing,item);if(type==='Song'&&chosenSongStyle){existing.theme=chosenSongStyle.theme;if(chosenSongStyle.template)existing.template=chosenSongStyle.template;else delete existing.template}['primaryVersion','secondaryVersion','secondarySlides','sectionLabels','fitText','verseSlides','secondaryVerseSlides','slideScreens','countdown','media'].forEach(key=>{if(item[key]===undefined)delete existing[key]})}
   else{const created={id:crypto.randomUUID(),...item,theme:type==='Song'&&chosenSongStyle?chosenSongStyle.theme:'dusk',...(type==='Song'&&chosenSongStyle?.template?{template:chosenSongStyle.template}:{})};service.items.push(created);selected=created.id}
   index=0;persist();render();$('itemDialog').close()
  };

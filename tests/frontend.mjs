@@ -402,6 +402,19 @@ check(licensedItem.primaryVersion,'NIV');check(licensedItem.slides[0].startsWith
  check(shared.context.worshipWorkspace.getService().title,'Advent 2 (changed)');
  check(JSON.parse(shared.storage.get('worshipui.recovery.v1')).at(-1).service.title,'Advent 2');
  await openFile({format:'something-else'});check(shared.node('syncStatus').textContent,'That file is not a WorshipUI setlist.');
+ // Images and video: files chosen in the editor become slides; taking a video live plays it, and it can be paused.
+ const chosenMedia=[{kind:'image',file:'a'.repeat(32)+'.png',name:'Welcome.png'},{kind:'video',file:'b'.repeat(32)+'.mp4',name:'Intro.mp4'}];
+ const mediaClient=await client('operator',false,null,{importMedia:async()=>chosenMedia});
+ mediaClient.node('add').onclick();mediaClient.node('typeInput').value='Media';await mediaClient.node('typeInput').onchange();
+ check(mediaClient.node('mediaFields').hidden,false);check(mediaClient.node('textInputRow').hidden,true);
+ await mediaClient.node('addMedia').onclick();check(mediaClient.node('mediaList').children.length,2);
+ mediaClient.node('titleInput').value='Welcome loop';mediaClient.node('itemForm').onsubmit({preventDefault(){}});
+ const mediaItem=mediaClient.context.worshipWorkspace.getService().items.at(-1);
+ check([mediaItem.type,mediaItem.title,mediaItem.slides,mediaItem.media],['Media','Welcome loop',['Welcome.png','Intro.mp4'],chosenMedia]);
+ mediaClient.node('slides').children[1].onclick();mediaClient.node('take').onclick();
+ let mediaLive=JSON.parse(mediaClient.storage.get(liveKey));check([mediaLive.media,mediaLive.paused],[chosenMedia[1],false]);
+ check(mediaClient.node('videoToggle').hidden,false);mediaClient.node('videoToggle').onclick();
+ mediaLive=JSON.parse(mediaClient.storage.get(liveKey));check(mediaLive.paused,true);check(mediaClient.node('videoToggle').textContent,'Play video');
  const remoteEditor=await client('editor',false);remoteEditor.node('slides').children[1].onclick();remoteEditor.node('slides').children[1].onclick();check(remoteEditor.storage.has(liveKey),false);
  return checks;
 }

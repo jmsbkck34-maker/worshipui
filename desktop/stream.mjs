@@ -22,7 +22,8 @@ export function streamState(output,settings,ccli){
  const s=validStreamSettings(settings)?settings:defaultStreamSettings;
  const o=output&&typeof output==='object'?output:{};
  let lines=[];
- if(!o.black&&!o.clear&&typeof o.text==='string'&&o.text.trim()){
+ // Media slides (images, video) have no text for the overlay; OBS can show the video itself.
+ if(!o.black&&!o.clear&&!o.media&&typeof o.text==='string'&&o.text.trim()){
   const first=o.text,second=typeof o.secondaryText==='string'?o.secondaryText:'';
   if(s.show==='first'||!second)lines=[first];
   else if(s.show==='second')lines=[second];

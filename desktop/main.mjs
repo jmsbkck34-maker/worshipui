@@ -1,6 +1,6 @@
 import {app,BrowserWindow,ipcMain,dialog,shell,screen,clipboard,Menu,safeStorage} from 'electron';
 import {signIn as googleSignIn,createTokens,createDrive,createGoogleApi} from './google.mjs';
-import {readFileSync,writeFileSync,existsSync,renameSync,mkdirSync,rmSync,readdirSync,statSync} from 'node:fs';
+import {readFileSync,writeFileSync,existsSync,renameSync,mkdirSync,rmSync,readdirSync,statSync,copyFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -24,7 +24,26 @@ else {
   settingsFile=path.join(app.getPath('userData'),'connection.json');
   if(existsSync(settingsFile))settings={origin:sharedOrigin(JSON.parse(readFileSync(settingsFile,'utf8')).origin||'')};
   store=openDeviceStore(path.join(app.getPath('userData'),'workspace'));
-  host=await createDesktopHost(root,settings.origin);
+  // Media folder for "Images & video" slides (and PowerPoint slides converted to images).
+  const mediaDir=path.join(app.getPath('userData'),'media');mkdirSync(mediaDir,{recursive:true});
+  host=await createDesktopHost(root,settings.origin,fetch,{mediaDir});
+  const mediaName=name=>typeof name==='string'&&/^[a-f0-9]{32}\.(png|jpg|jpeg|webp|gif|mp4|webm|m4v|mov)$/.test(name);
+  // Copy chosen files into the media folder under new random names; returns slide entries.
+  ipcMain.handle('wui:import-media',async event=>{
+   if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');
+   const result=await dialog.showOpenDialog(main,{title:'Add images or videos',properties:['openFile','multiSelections'],filters:[{name:'Images and videos',extensions:['png','jpg','jpeg','webp','gif','mp4','webm','m4v','mov']}]});
+   if(result.canceled)return [];
+   return result.filePaths.slice(0,200).map(source=>{
+    const ext=path.extname(source).slice(1).toLowerCase(),file=randomUUID().replace(/-/g,'')+'.'+ext;
+    if(!mediaName(file))throw Error('Choose PNG, JPEG, WebP or GIF images, or MP4, WebM, M4V or MOV videos.');
+    if(statSync(source).size>2_000_000_000)throw Error('Each file must be under 2 GB.');
+    copyFileSync(source,path.join(mediaDir,file));
+    return {kind:['mp4','webm','m4v','mov'].includes(ext)?'video':'image',file,name:path.basename(source).slice(0,120)};
+   });
+  });
+  // Media used by a setlist file travel in a "WorshipUI media" folder next to it.
+  const mediaInSetlist=text=>{try{return [...new Set((JSON.parse(text).service?.items||[]).flatMap(item=>Array.isArray(item.media)?item.media.map(entry=>entry?.file):[]).filter(mediaName))]}catch{return []}};
+  const copyMedia=(names,from,to)=>{mkdirSync(to,{recursive:true});for(const name of names){const source=path.join(from,name),target=path.join(to,name);if(existsSync(source)&&!existsSync(target))copyFileSync(source,target)}};
   // Setlist files in a shared folder. The folder is remembered per computer (setlist-folder.json in app data);
   // only "<name>.worshipui.json" files directly inside it are listed, read or written.
   const folderFile=path.join(app.getPath('userData'),'setlist-folder.json');
@@ -45,7 +64,9 @@ else {
   ipcMain.handle('wui:read-setlist-file',(event,name)=>{
    mainOnlyFolder(event);const folder=setlistFolder();if(!folder||!setlistName(name))throw Error('Choose a setlist file from the setlist folder.');
    const file=path.join(folder,name);if(statSync(file).size>6_000_000)throw Error('That setlist file is too large.');
-   return readFileSync(file,'utf8');
+   const text=readFileSync(file,'utf8');
+   copyMedia(mediaInSetlist(text),path.join(folder,'WorshipUI media'),mediaDir);
+   return text;
   });
   // Saves into the setlist folder, or asks where to save when no folder is chosen.
   ipcMain.handle('wui:save-setlist-file',async(event,name,text)=>{
@@ -53,7 +74,9 @@ else {
    if(!setlistName(name)||typeof text!=='string'||text.length>6_000_000)throw Error('Could not save that setlist file.');
    let target=setlistFolder()?path.join(setlistFolder(),name):'';
    if(!target){const choice=await dialog.showSaveDialog(main,{title:'Save setlist file',defaultPath:path.join(app.getPath('documents'),name),filters:[{name:'WorshipUI setlist',extensions:['json']}]});if(choice.canceled||!choice.filePath)return '';target=choice.filePath}
-   writeFileSync(target+'.tmp',text,{encoding:'utf8'});renameSync(target+'.tmp',target);return target;
+   writeFileSync(target+'.tmp',text,{encoding:'utf8'});renameSync(target+'.tmp',target);
+   copyMedia(mediaInSetlist(text),mediaDir,path.join(path.dirname(target),'WorshipUI media'));
+   return target;
   });
   // Home sync with Google. The church's Google Cloud OAuth client (desktop/google-client.json, see GOOGLE-SETUP.md)
   // enables it; the saved sign-in is encrypted with the operating system's protection (safeStorage).

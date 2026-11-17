@@ -32,9 +32,10 @@ export function validService(s) {
     new Set(s.items.map(i => i?.id)).size === s.items.length &&
     s.items.every(i => i && typeof i.id === 'string' && i.id.length <= 100 &&
       typeof i.title === 'string' && i.title.length <= 100 &&
-      ['Song','Scripture','Announcement','Sermon','Countdown'].includes(i.type) &&
-      // Countdown items carry their timer settings; other items have none.
+      ['Song','Scripture','Announcement','Sermon','Countdown','Media'].includes(i.type) &&
+      // Countdown items carry their timer settings, Media items their files; other items have neither.
       (i.type === 'Countdown' ? SlideTemplate.validCountdown(i.countdown) : i.countdown === undefined) &&
+      (i.type === 'Media' ? SlideTemplate.validMediaItem(i) : i.media === undefined) &&
       ['dusk','ocean','ember','midnight'].includes(i.theme) && SlideTemplate.validTemplate(i.template) &&
       Array.isArray(i.slides) && i.slides.length > 0 && i.slides.length <= 200 &&
       i.slides.every(t => typeof t === 'string' && t.length <= 20000) && validTranslations(i) &&

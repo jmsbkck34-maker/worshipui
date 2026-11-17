@@ -56,6 +56,13 @@
   if(remaining===0&&live.end==='message'&&live.endMessage)return live.endMessage;
   return (live.message?live.message+'\n':'')+clockText(remaining);
  }
- const api={fonts,bundledFonts,motions,defaults,validTemplate,normalize,textPosition,emptyBranding,validBranding,validBrandingRecord,validCountdown,countdownTarget,validLiveCountdown,countdownText,clockText};
+ // Media slides ("Images & video" items): each slide shows one file from the computer's media folder.
+ // Files are named <32 hex>.<ext>; the kind must match the extension.
+ const imageTypes=['png','jpg','jpeg','webp','gif'],videoTypes=['mp4','webm','m4v','mov'];
+ function mediaKind(file){const ext=String(file).split('.').pop().toLowerCase();return imageTypes.includes(ext)?'image':videoTypes.includes(ext)?'video':null}
+ function validMediaFile(file){return typeof file==='string'&&/^[a-f0-9]{32}\.[a-z0-9]{3,4}$/.test(file)&&!!mediaKind(file)}
+ function validMediaEntry(entry){return !!entry&&typeof entry==='object'&&validMediaFile(entry.file)&&entry.kind===mediaKind(entry.file)&&typeof entry.name==='string'&&entry.name.length<=120}
+ function validMediaItem(item){return Array.isArray(item.media)&&item.media.length===item.slides.length&&item.media.every(validMediaEntry)}
+ const api={fonts,bundledFonts,motions,defaults,validTemplate,normalize,textPosition,emptyBranding,validBranding,validBrandingRecord,validCountdown,countdownTarget,validLiveCountdown,countdownText,clockText,imageTypes,videoTypes,mediaKind,validMediaFile,validMediaEntry,validMediaItem};
  if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.SlideTemplate=api;
 })(globalThis);

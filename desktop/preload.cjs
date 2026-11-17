@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('worshipDesktop',{
  readClipboard:()=>ipcRenderer.invoke('wui:read-clipboard'),
  fetchBible:url=>ipcRenderer.invoke('wui:fetch-bible',url),
  streamInfo:()=>ipcRenderer.invoke('wui:stream-info'),
+ importMedia:()=>ipcRenderer.invoke('wui:import-media'),
  setlistFolder:()=>ipcRenderer.invoke('wui:setlist-folder'),
  chooseSetlistFolder:()=>ipcRenderer.invoke('wui:choose-setlist-folder'),
  listSetlistFiles:()=>ipcRenderer.invoke('wui:list-setlist-files'),

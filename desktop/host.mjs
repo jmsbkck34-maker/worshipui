@@ -1,5 +1,6 @@
 import http from 'node:http';
-import {readFile} from 'node:fs/promises';
+import {readFile,stat} from 'node:fs/promises';
+import {createReadStream} from 'node:fs';
 import path from 'node:path';
 import {sharedOrigin} from './storage.mjs';
 const FILES=new Map([['/',['index.html','text/html']],['/index.html',['index.html','text/html']],['/app.js',['app.js','text/javascript']],['/content-import.js',['content-import.js','text/javascript']],['/sync.js',['sync.js','text/javascript']],['/sync-core.js',['sync-core.js','text/javascript']],['/slide-template.cjs',['slide-template.cjs','text/javascript']],['/assets/fonts/Inter.ttf',['assets/fonts/Inter.ttf','font/ttf']],['/assets/fonts/Montserrat.ttf',['assets/fonts/Montserrat.ttf','font/ttf']],['/assets/fonts/Lato.ttf',['assets/fonts/Lato.ttf','font/ttf']],['/assets/fonts/Merriweather.ttf',['assets/fonts/Merriweather.ttf','font/ttf']],['/assets/fonts/PlayfairDisplay.ttf',['assets/fonts/PlayfairDisplay.ttf','font/ttf']],['/assets/fonts/Oswald.ttf',['assets/fonts/Oswald.ttf','font/ttf']],['/assets/fonts/Poppins.ttf',['assets/fonts/Poppins.ttf','font/ttf']],['/assets/fonts/SourceSans3.ttf',['assets/fonts/SourceSans3.ttf','font/ttf']],['/desktop-ui.js',['desktop-ui.js','text/javascript']],['/style.css',['style.css','text/css']]]);
@@ -9,7 +10,20 @@ FILES.set('/assets/bibles/kjv.vpl.txt',['assets/bibles/kjv.vpl.txt','text/plain'
 FILES.set('/assets/bibles/web.vpl.txt',['assets/bibles/web.vpl.txt','text/plain']);
 FILES.set('/assets/bibles/rv1909.vpl.txt',['assets/bibles/rv1909.vpl.txt','text/plain']);
 const ENDPOINTS=new Set(['/api/me','/api/login','/api/logout','/api/service','/api/versions','/api/branding']);
-export async function createDesktopHost(root,initialOrigin='',remoteFetch=fetch){
+// Media files for "Images & video" slides, served from the app's media folder with byte ranges (video seeking).
+const MEDIA_TYPES={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',gif:'image/gif',mp4:'video/mp4',webm:'video/webm',m4v:'video/mp4',mov:'video/quicktime'};
+async function serveMedia(req,res,mediaDir,name){
+ const file=path.join(mediaDir,name);let info;try{info=await stat(file)}catch{res.writeHead(404);res.end();return}
+ const type=MEDIA_TYPES[name.split('.').pop()],range=/^bytes=(\d*)-(\d*)$/.exec(req.headers.range||'');
+ if(range){
+  const start=range[1]?Number(range[1]):Math.max(0,info.size-Number(range[2])),end=range[1]&&range[2]?Math.min(Number(range[2]),info.size-1):info.size-1;
+  if(start>end||start>=info.size){res.writeHead(416,{'Content-Range':'bytes */'+info.size});res.end();return}
+  res.writeHead(206,{'Content-Type':type,'Accept-Ranges':'bytes','Content-Range':`bytes ${start}-${end}/${info.size}`,'Content-Length':end-start+1});
+  createReadStream(file,{start,end}).pipe(res);return;
+ }
+ res.writeHead(200,{'Content-Type':type,'Accept-Ranges':'bytes','Content-Length':info.size});createReadStream(file).pipe(res);
+}
+export async function createDesktopHost(root,initialOrigin='',remoteFetch=fetch,{mediaDir=''}={}){
  let remote=sharedOrigin(initialOrigin),cookie='',localApi=null;
  const server=http.createServer(async(req,res)=>{
   res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
@@ -19,6 +33,8 @@ export async function createDesktopHost(root,initialOrigin='',remoteFetch=fetch)
    const origin=`http://127.0.0.1:${server.address().port}`;
    if(req.headers.host!==new URL(origin).host)return reply(403,{error:'Unexpected host'});
    const url=new URL(req.url,origin);
+   const media=/^\/media\/([a-f0-9]{32}\.(?:png|jpg|jpeg|webp|gif|mp4|webm|m4v|mov))$/.exec(url.pathname);
+   if(media&&mediaDir&&req.method==='GET')return serveMedia(req,res,mediaDir,media[1]);
    if(!url.pathname.startsWith('/api/')){
     const file=FILES.get(url.pathname);if(!file||req.method!=='GET')return reply(404,{error:'Not found'});
     res.writeHead(200,{'Content-Type':file[1]+'; charset=utf-8'});res.end(await readFile(path.join(root,file[0])));return;
