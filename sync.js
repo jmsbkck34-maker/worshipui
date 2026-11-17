@@ -269,6 +269,65 @@
    status(date?'Opened setlist '+date+' · checking for shared changes':'Opened undated service · checking for shared changes');
    if(identity)sync();
  }
+ // Setlist files ("<date> <title>.worshipui.json") carry one dated setlist between computers through a shared folder.
+ const desktopFolder=()=>!!window.worshipDesktop?.listSetlistFiles;
+ function setlistFileName(){
+  const title=bridge.getService().title.replace(/[^\p{L}\p{N} _-]+/gu,' ').replace(/\s+/g,' ').trim().slice(0,70)||'Setlist';
+  return (bridge.getDate()||'undated')+' '+title+'.worshipui.json';
+ }
+ $('saveSetlistFile').onclick=async()=>{
+  const text=JSON.stringify({format:'worshipui-setlist',version:1,date:bridge.getDate(),service:bridge.getService(),savedAt:new Date().toISOString()},null,1),name=setlistFileName();
+  try{
+   if(desktopFolder()){const saved=await window.worshipDesktop.saveSetlistFile(name,text);if(saved)status('Setlist saved: '+name)}
+   else{const url=URL.createObjectURL(new Blob([text],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);status('Setlist saved: '+name)}
+  }catch{status('Could not save the setlist file.')}
+ };
+ // Open a setlist from a file: it goes to its own date (asking before replacing a different setlist, which is kept
+ // as a recovery copy) and becomes the open setlist.
+ async function openSetlistData(data){
+  const date=typeof data?.date==='string'?data.date:null;
+  if(data?.format!=='worshipui-setlist'||data.version!==1||date===null||(date&&!/^\d{4}-\d{2}-\d{2}$/.test(date))||!bridge.valid(data.service)){status('That file is not a WorshipUI setlist.');return false}
+  const existing=bridge.getDateEntry(date),where=date||'the undated service';
+  if(existing&&existing.service.items.length&&!core.same(existing.service,data.service)&&!confirm('Replace your setlist for '+where+' with the one from the file? A recovery copy of yours is kept.'))return false;
+  if(bridge.getDate()!==date||!existing){openDate(date,false);if(bridge.getDate()!==date)return false}
+  if(!core.same(bridge.getService(),data.service)){if(!backup())return false;if(!bridge.replace(data.service)){status('Could not open that setlist on this device.');return false}}
+  status('Opened setlist '+where+' from file');label();return true;
+ }
+ async function renderSetlistFiles(){
+  const folder=await window.worshipDesktop.setlistFolder(),list=$('setlistFilesList');list.replaceChildren();
+  $('setlistFilesFolder').textContent=folder?'Folder: '+folder:'No setlist folder chosen yet (Settings → Setlist folder).';
+  const files=folder?await window.worshipDesktop.listSetlistFiles():[];
+  if(folder&&!files.length){const empty=document.createElement('p');empty.className='subtle';empty.textContent='No setlist files in this folder yet.';list.append(empty)}
+  files.forEach(entry=>{
+   const button=document.createElement('button');button.type='button';button.className='setlist-file';
+   const name=document.createElement('strong');name.textContent=entry.name.replace(/\.worshipui\.json$/,'');
+   const when=document.createElement('small');when.textContent=new Date(entry.modified).toLocaleString();
+   button.append(name,when);
+   button.onclick=async()=>{try{if(await openSetlistData(JSON.parse(await window.worshipDesktop.readSetlistFile(entry.name))))$('setlistFilesDialog').close()}catch{status('That file is not a WorshipUI setlist.')}};
+   list.append(button);
+  });
+ }
+ $('openSetlistFile').onclick=async()=>{
+  if(busy){status('Wait for the current sync to finish before changing dates.');return}
+  if(desktopFolder()&&await window.worshipDesktop.setlistFolder()){await renderSetlistFiles();$('setlistFilesDialog').showModal()}
+  else $('setlistFileInput').click();
+ };
+ $('openOtherSetlistFile').onclick=()=>{$('setlistFilesDialog').close();$('setlistFileInput').click()};
+ $('closeSetlistFiles').onclick=()=>$('setlistFilesDialog').close();
+ $('setlistFileInput').onchange=async event=>{
+  const chosen=event.target.files[0];if(!chosen)return;
+  try{if(chosen.size>6000000)throw Error();await openSetlistData(JSON.parse(await chosen.text()))}catch{status('That file is not a WorshipUI setlist.')}
+  finally{event.target.value=''}
+ };
+ // Settings → Setlist folder, and the Google Drive guide.
+ async function renderSetlistFolder(){
+  if(!desktopFolder()){$('setlistFolderPath').value='';$('chooseSetlistFolder').disabled=true;$('setlistFolderStatus').textContent='Choosing a folder is available in the installed app. In a browser, Save downloads the file and Open asks for it.';return}
+  $('setlistFolderPath').value=await window.worshipDesktop.setlistFolder();
+ }
+ $('chooseSetlistFolder').onclick=async()=>{$('setlistFolderPath').value=await window.worshipDesktop.chooseSetlistFolder();$('setlistFolderStatus').textContent=$('setlistFolderPath').value?'Setlist folder saved on this computer.':''};
+ $('showFolderGuide').onclick=()=>$('folderGuideDialog').showModal();
+ $('closeFolderGuide').onclick=()=>$('folderGuideDialog').close();
+ renderSetlistFolder();
  $('openDate').onclick=()=>{if(!$('setlistDate').value){status('Choose a setlist date first.');return}openDate($('setlistDate').value,false)};
  $('copyDate').onclick=()=>{if(!$('setlistDate').value){status('Choose a setlist date first.');return}openDate($('setlistDate').value,true)};
  $('openUndated').onclick=()=>openDate('',false);
@@ -296,7 +355,7 @@
    }else if('serviceWorker' in navigator){
      try{
        await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;
-       const cache=await caches.open('worshipui-shell-v32');const files=['/','/index.html','/app.js','/content-import.js','/bible-search.js','/assets/bibles/kjv.vpl.txt','/assets/bibles/web.vpl.txt','/assets/bibles/rv1909.vpl.txt','/style.css','/sync-core.js','/sync.js','/i18n.js','/desktop-ui.js','/slide-template.cjs','/assets/fonts/Inter.ttf','/assets/fonts/Montserrat.ttf','/assets/fonts/Lato.ttf','/assets/fonts/Merriweather.ttf','/assets/fonts/PlayfairDisplay.ttf','/assets/fonts/Oswald.ttf','/assets/fonts/Poppins.ttf','/assets/fonts/SourceSans3.ttf'];
+       const cache=await caches.open('worshipui-shell-v33');const files=['/','/index.html','/app.js','/content-import.js','/bible-search.js','/assets/bibles/kjv.vpl.txt','/assets/bibles/web.vpl.txt','/assets/bibles/rv1909.vpl.txt','/style.css','/sync-core.js','/sync.js','/i18n.js','/desktop-ui.js','/slide-template.cjs','/assets/fonts/Inter.ttf','/assets/fonts/Montserrat.ttf','/assets/fonts/Lato.ttf','/assets/fonts/Merriweather.ttf','/assets/fonts/PlayfairDisplay.ttf','/assets/fonts/Oswald.ttf','/assets/fonts/Poppins.ttf','/assets/fonts/SourceSans3.ttf'];
        const ready=(await Promise.all(files.map(file=>cache.match(file)))).every(Boolean);
        $('offlineStatus').textContent=ready?'✓ App downloaded · text service available offline':'Offline download incomplete · keep this window open';
      }catch{$('offlineStatus').textContent='Offline app download unavailable · keep this window open'}

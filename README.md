@@ -178,3 +178,9 @@ When **Show the CCLI Streaming License number** is on and the number is entered 
 ### OBS on a different computer
 
 If OBS runs on another computer on the same network, turn on **Screens → Livestream (OBS) → Allow OBS on another computer on this network**. WorshipUI then lists addresses such as `http://192.168.1.20:48095/stream?key=…`. Paste one into the OBS Browser source on the streaming computer. The `key` at the end is a random code: other devices on the network get no access without it. **Make a new key** replaces it, and OBS then needs the new address. The first time the option is on, Windows may ask whether WorshipUI can use the network; allow **Private networks**. The address starting with 192.168… can change if the router gives the computer a new address, while the one using the computer's name stays the same.
+
+## Sharing setlists between computers (setlist folder)
+
+Build a setlist at home, choose **Save to folder** (under the saved setlists), then **Open from folder** on the church computer. The file is named after the date and service title, for example `2026-11-29 Advent 1.worshipui.json`. Opening it puts it on its own date. If that date already has a different setlist, WorshipUI asks first and keeps a recovery copy of the old one.
+
+Choose the shared folder once on each computer in **Settings → Setlist folder**. Any folder both computers can see works: Google Drive, OneDrive, Dropbox, a network folder or a USB stick. **How to set up a shared Google Drive folder** in Settings walks through Google Drive for desktop, including sharing between two different Google accounts. Without a chosen folder, Save asks where to save and Open asks for the file, so the file can also be emailed. In a browser, Save downloads the file.

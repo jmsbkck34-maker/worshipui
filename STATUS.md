@@ -22,6 +22,7 @@ Branch: `work/setlist-history-20261116` (version 0.3.4). Automated tests: 34 pas
 - **Screens:**
   - Two audience screens, each showing both languages, the first only or the second only. Slides can target one screen.
   - Screen setup detects displays, shows a map of them, has Identify, and opens each output fullscreen on its assigned display.
+- **Setlist folder (home to church):** Save to folder / Open from folder share a setlist file through any shared folder (Google Drive, OneDrive, Dropbox, network folder, USB). Settings → Setlist folder includes a Google Drive setup guide. Verified in the installed app with a test folder.
 - **Setlists:**
   - Dated setlists listed under the calendar: click to open, × to delete. Deleted setlists go to the recovery copies.
   - A warning appears before switching away from unsaved or unpublished changes.

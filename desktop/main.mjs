@@ -1,6 +1,6 @@
 import {app,BrowserWindow,ipcMain,dialog,shell,screen,clipboard,Menu,safeStorage} from 'electron';
 import {signIn as googleSignIn,createTokens,createDrive,createGoogleApi} from './google.mjs';
-import {readFileSync,writeFileSync,existsSync,renameSync,mkdirSync,rmSync} from 'node:fs';
+import {readFileSync,writeFileSync,existsSync,renameSync,mkdirSync,rmSync,readdirSync,statSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -25,6 +25,36 @@ else {
   if(existsSync(settingsFile))settings={origin:sharedOrigin(JSON.parse(readFileSync(settingsFile,'utf8')).origin||'')};
   store=openDeviceStore(path.join(app.getPath('userData'),'workspace'));
   host=await createDesktopHost(root,settings.origin);
+  // Setlist files in a shared folder. The folder is remembered per computer (setlist-folder.json in app data);
+  // only "<name>.worshipui.json" files directly inside it are listed, read or written.
+  const folderFile=path.join(app.getPath('userData'),'setlist-folder.json');
+  const setlistFolder=()=>{try{const folder=JSON.parse(readFileSync(folderFile,'utf8')).folder;return typeof folder==='string'&&existsSync(folder)?folder:''}catch{return ''}};
+  const setlistName=name=>typeof name==='string'&&/^[^\\/:*?"<>|]{1,120}\.worshipui\.json$/.test(name)&&!name.startsWith('.');
+  const mainOnlyFolder=event=>{if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window')};
+  ipcMain.handle('wui:setlist-folder',event=>{mainOnlyFolder(event);return setlistFolder()});
+  ipcMain.handle('wui:choose-setlist-folder',async event=>{
+   mainOnlyFolder(event);
+   const result=await dialog.showOpenDialog(main,{title:'Choose the shared setlist folder',properties:['openDirectory','createDirectory'],defaultPath:setlistFolder()||app.getPath('documents')});
+   if(result.canceled||!result.filePaths[0])return setlistFolder();
+   writeFileSync(folderFile,JSON.stringify({folder:result.filePaths[0]}),{mode:0o600});return result.filePaths[0];
+  });
+  ipcMain.handle('wui:list-setlist-files',event=>{
+   mainOnlyFolder(event);const folder=setlistFolder();if(!folder)return [];
+   return readdirSync(folder).filter(setlistName).map(name=>({name,modified:statSync(path.join(folder,name)).mtimeMs})).sort((a,b)=>b.modified-a.modified).slice(0,200);
+  });
+  ipcMain.handle('wui:read-setlist-file',(event,name)=>{
+   mainOnlyFolder(event);const folder=setlistFolder();if(!folder||!setlistName(name))throw Error('Choose a setlist file from the setlist folder.');
+   const file=path.join(folder,name);if(statSync(file).size>6_000_000)throw Error('That setlist file is too large.');
+   return readFileSync(file,'utf8');
+  });
+  // Saves into the setlist folder, or asks where to save when no folder is chosen.
+  ipcMain.handle('wui:save-setlist-file',async(event,name,text)=>{
+   mainOnlyFolder(event);
+   if(!setlistName(name)||typeof text!=='string'||text.length>6_000_000)throw Error('Could not save that setlist file.');
+   let target=setlistFolder()?path.join(setlistFolder(),name):'';
+   if(!target){const choice=await dialog.showSaveDialog(main,{title:'Save setlist file',defaultPath:path.join(app.getPath('documents'),name),filters:[{name:'WorshipUI setlist',extensions:['json']}]});if(choice.canceled||!choice.filePath)return '';target=choice.filePath}
+   writeFileSync(target+'.tmp',text,{encoding:'utf8'});renameSync(target+'.tmp',target);return target;
+  });
   // Home sync with Google. The church's Google Cloud OAuth client (desktop/google-client.json, see GOOGLE-SETUP.md)
   // enables it; the saved sign-in is encrypted with the operating system's protection (safeStorage).
   const googleClient=(()=>{try{const c=JSON.parse(readFileSync(path.join(here,'google-client.json'),'utf8'));return typeof c.client_id==='string'&&c.client_id?c:null}catch{return null}})();

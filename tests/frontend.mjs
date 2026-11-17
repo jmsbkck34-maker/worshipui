@@ -388,6 +388,20 @@ check(licensedItem.primaryVersion,'NIV');check(licensedItem.slides[0].startsWith
  const timerStart=Date.now();timer.node('take').onclick();const liveTimer=JSON.parse(timer.storage.get(liveKey));
  check(liveTimer.type,'Countdown');check(liveTimer.countdown.target>=timerStart+150000&&liveTimer.countdown.target<=Date.now()+150000,true);
  check(timer.node('live').children[0].textContent.startsWith('Service begins in\n2:'),true);
+ // Setlist files: opening one puts it on its own date; replacing a different setlist asks and keeps a recovery copy.
+ const shared=await client('operator',false);
+ const fromHome={format:'worshipui-setlist',version:1,date:'2026-12-06',service:{title:'Advent 2',items:[{id:'a',title:'Song',type:'Song',theme:'dusk',slides:['Come, thou long expected Jesus']}]},savedAt:'2026-12-01T20:00:00Z'};
+ const openFile=async data=>shared.node('setlistFileInput').onchange({target:{files:[{size:1000,text:async()=>JSON.stringify(data)}],value:''}});
+ await openFile(fromHome);await settle();
+ check(shared.context.worshipWorkspace.getDate(),'2026-12-06');check(shared.context.worshipWorkspace.getService(),fromHome.service);
+ let asked='';shared.context.confirm=message=>{asked=message;return false};
+ await openFile({...fromHome,service:{...fromHome.service,title:'Advent 2 (changed)'}});await settle();
+ check(asked.startsWith('Replace your setlist for 2026-12-06'),true);check(shared.context.worshipWorkspace.getService().title,'Advent 2');
+ shared.context.confirm=()=>true;
+ await openFile({...fromHome,service:{...fromHome.service,title:'Advent 2 (changed)'}});await settle();
+ check(shared.context.worshipWorkspace.getService().title,'Advent 2 (changed)');
+ check(JSON.parse(shared.storage.get('worshipui.recovery.v1')).at(-1).service.title,'Advent 2');
+ await openFile({format:'something-else'});check(shared.node('syncStatus').textContent,'That file is not a WorshipUI setlist.');
  const remoteEditor=await client('editor',false);remoteEditor.node('slides').children[1].onclick();remoteEditor.node('slides').children[1].onclick();check(remoteEditor.storage.has(liveKey),false);
  return checks;
 }

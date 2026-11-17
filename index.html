@@ -30,6 +30,7 @@
    <button id="openUndated" type="button">Undated service</button>
    <p id="dateStatus" role="status">Undated service</p>
    <div id="savedSetlists" class="saved-setlists" aria-label="Saved setlists"></div>
+   <div class="setlist-file-actions"><button id="saveSetlistFile" type="button" title="Save this setlist as a file in the shared setlist folder">Save to folder</button><button id="openSetlistFile" type="button" title="Open a setlist file saved on another computer">Open from folder</button><input id="setlistFileInput" type="file" accept=".json,application/json" hidden></div>
   </div>
   <div class="eyebrow">YOUR SERVICE</div>
   <input id="serviceTitle" aria-label="Service title" maxlength="100">
@@ -103,6 +104,24 @@
   </div>
   <p id="streamStatus" class="subtle" role="status"></p>
  </section>
+</dialog>
+<dialog id="setlistFilesDialog" aria-labelledby="setlistFilesTitle">
+ <div class="settings-top"><div><div class="eyebrow">SETLIST FOLDER</div><h2 id="setlistFilesTitle">Open a setlist</h2></div><button id="closeSetlistFiles" type="button">Close</button></div>
+ <p id="setlistFilesFolder" class="subtle"></p>
+ <div id="setlistFilesList" class="setlist-files-list"></div>
+ <button id="openOtherSetlistFile" type="button">Choose a file somewhere else…</button>
+</dialog>
+<dialog id="folderGuideDialog" aria-labelledby="folderGuideTitle">
+ <div class="settings-top"><div><div class="eyebrow">SETLIST FOLDER</div><h2 id="folderGuideTitle">Share setlists with Google Drive</h2></div><button id="closeFolderGuide" type="button">Done</button></div>
+ <ol class="folder-guide">
+  <li><strong>Install Google Drive for desktop</strong> on the home computer and the church computer (google.com/drive/download), then sign in.</li>
+  <li><strong>Create a folder</strong> in My Drive named <em>WorshipUI Setlists</em>.</li>
+  <li><strong>Different Google accounts at home and at church?</strong> In drive.google.com, right-click the folder → <em>Share</em> → add the other account as <em>Editor</em>. On the other computer, open <em>Shared with me</em>, right-click the folder → <em>Organize → Add shortcut</em> → <em>My Drive</em>.</li>
+  <li><strong>In WorshipUI on each computer:</strong> Settings → Setlist folder → <em>Choose folder</em>, and pick <em>Google Drive → My Drive → WorshipUI Setlists</em> (usually drive G:).</li>
+  <li><strong>At home:</strong> open the date, build the setlist, choose <em>Save to folder</em>.</li>
+  <li><strong>At church:</strong> choose <em>Open from folder</em> and pick the setlist. Google Drive may take a minute to bring the file over.</li>
+ </ol>
+ <p class="subtle">Opening a setlist for a date that already has one asks first and keeps a recovery copy of the old one.</p>
 </dialog>
 <dialog id="templateDialog">
  <div class="eyebrow">SLIDE APPEARANCE</div>
@@ -188,6 +207,13 @@
   <h3>Second language</h3>
   <label>Default second translation<select id="secondLanguage"></select></label>
   <p id="secondLanguageStatus" class="subtle" role="status">Used for the second translation when choosing Scripture.</p>
+ </section>
+ <section class="provider-section setlist-folder-section">
+  <h3>Setlist folder</h3>
+  <p class="subtle">Build a setlist at home, choose <strong>Save to folder</strong>, then <strong>Open from folder</strong> at church. Pick the same shared folder on both computers — Google Drive, OneDrive, Dropbox, a network folder or a USB stick.</p>
+  <div class="stream-address"><input id="setlistFolderPath" readonly aria-label="Setlist folder" placeholder="No folder chosen — Save and Open will ask each time"><button id="chooseSetlistFolder" type="button">Choose folder</button></div>
+  <button id="showFolderGuide" type="button">How to set up a shared Google Drive folder</button>
+  <p id="setlistFolderStatus" class="subtle" role="status"></p>
  </section>
  <section class="provider-section licensed-section">
   <h3>Licensed Bible versions</h3>
