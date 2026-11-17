@@ -10,7 +10,7 @@ FILES.set('/assets/bibles/web.vpl.txt',['assets/bibles/web.vpl.txt','text/plain'
 FILES.set('/assets/bibles/rv1909.vpl.txt',['assets/bibles/rv1909.vpl.txt','text/plain']);
 const ENDPOINTS=new Set(['/api/me','/api/login','/api/logout','/api/service','/api/versions','/api/branding']);
 export async function createDesktopHost(root,initialOrigin='',remoteFetch=fetch){
- let remote=sharedOrigin(initialOrigin),cookie='';
+ let remote=sharedOrigin(initialOrigin),cookie='',localApi=null;
  const server=http.createServer(async(req,res)=>{
   res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
@@ -26,8 +26,14 @@ export async function createDesktopHost(root,initialOrigin='',remoteFetch=fetch)
    if(!ENDPOINTS.has(url.pathname)&&!/^\/api\/versions\/\d+$/.test(url.pathname)&&!/^\/api\/setlists\/[0-9]{4}-[0-9]{2}-[0-9]{2}(?:\/versions(?:\/[0-9]+)?)?$/.test(url.pathname))return reply(404,{error:'Not found'});
    if(!['GET','PUT','POST'].includes(req.method))return reply(405,{error:'Method not allowed'});
    if(req.method!=='GET'&&(req.headers.origin!==origin||!req.headers['content-type']?.startsWith('application/json')))return reply(403,{error:'Local same-origin JSON required'});
-   if(!remote)return reply(503,{error:'No shared server configured. Your church workspace runs locally.'});
    let size=0,chunks=[];for await(const chunk of req){size+=chunk.length;if(size>5_000_000)return reply(413,{error:'Request too large'});chunks.push(chunk)}
+   // Signed in with Google: answer from Google Drive instead of a shared server.
+   if(localApi){
+    let body=null;if(req.method!=='GET'){try{body=JSON.parse(Buffer.concat(chunks).toString('utf8')||'null')}catch{return reply(400,{error:'Invalid JSON'})}}
+    try{const result=await localApi(req.method,url.pathname,body);return reply(result.status,result.body)}
+    catch(error){return reply(error.status===401?401:503,{error:error.message||'Google Drive is unavailable. Your setlists are still on this computer.'})}
+   }
+   if(!remote)return reply(503,{error:'No shared server configured. Your church workspace runs locally.'});
    const requestOrigin=remote;
    const response=await remoteFetch(remote+url.pathname,{method:req.method,headers:{Origin:remote,'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},...(req.method!=='GET'?{body:Buffer.concat(chunks)}:{}),redirect:'error',signal:AbortSignal.timeout(10000)});
    if(remote!==requestOrigin)return reply(409,{error:'Shared server changed. Retry the request.'});
@@ -43,5 +49,5 @@ export async function createDesktopHost(root,initialOrigin='',remoteFetch=fetch)
   }catch{reply(503,{error:'Shared server unavailable. Your downloaded service is available locally.'})}
  });
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve)});
- return {server,origin:`http://127.0.0.1:${server.address().port}`,getRemote:()=>remote,setRemote(value){remote=sharedOrigin(value);cookie=''}};
+ return {server,origin:`http://127.0.0.1:${server.address().port}`,getRemote:()=>remote,setRemote(value){remote=sharedOrigin(value);cookie=''},setLocalApi(handler){localApi=handler}};
 }

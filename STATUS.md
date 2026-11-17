@@ -1,6 +1,6 @@
 # WorshipUI status — 2026-11-16
 
-Branch: `work/setlist-history-20261116` (version 0.3.4). Automated tests: 32 passing (`npm test`).
+Branch: `work/setlist-history-20261116` (version 0.3.4). Automated tests: 34 passing (`npm test`).
 
 ## Working in the demo
 
@@ -31,6 +31,7 @@ Branch: `work/setlist-history-20261116` (version 0.3.4). Automated tests: 32 pas
 
 ## Not tested yet
 
+- **Home sync with Google:** Connect → Sign in with Google on the home and church computers (same Google account) shares setlists, the undated service and branding through the account's private Drive app-data area. It keeps the same revision checks, review and conflict protection as the shared server. It needs the one-time Google Cloud setup in GOOGLE-SETUP.md (credentials go in the GOOGLE_CLIENT_JSON GitHub secret, never in the repository). Tested with a stand-in for Google; not yet with a real Google account.
 - **macOS app:** it is built by GitHub Actions (`build-mac.yml`) and ad-hoc signed, but has not been run on a real Mac. The install steps, including Open Anyway, are in the README.
 - Placing windows on a second physical display (the development PC has one display).
 - The hidden **Get verses from YouVersion** fetch, added at the end of the session, passes the automated tests but has not been tried against live bible.com. The earlier visible-window version, which uses the same verse reader, was verified with John 3:16–17.

@@ -15,7 +15,7 @@
  panel.innerHTML='<div class="sync-heading"><div><strong>Shared service</strong><p id="syncStatus" role="status">Local only · connect to share</p></div><button id="connect">Connect</button></div><div class="sync-buttons"><button id="liveMode" aria-pressed="false">Enter Live mode</button><button id="publish" disabled>Publish changes</button><button id="reviewUpdate" hidden>Review update</button><button id="history" disabled>Version history</button><button id="recovery">Download recovery</button></div><p id="offlineStatus">Preparing offline app…</p><p id="syncIdentity"></p>';
  document.querySelector('aside').append(panel);
  const dialog=document.createElement('dialog');dialog.id='syncDialog';
- dialog.innerHTML='<form id="loginForm"><div class="eyebrow">CONNECT YOUR TEAM</div><h2>Same service. Wherever you prepare.</h2><p>Sign in to the same WorshipUI address at home and at church. Your local copy remains available offline.</p><label>Username<input id="syncUsername" autocomplete="username" required></label><label>Password<input id="syncPassword" type="password" autocomplete="current-password" required></label><p id="loginError" role="alert"></p><div class="dialog-actions"><button id="closeLogin" type="button">Cancel</button><button class="primary" type="submit">Sign in</button></div></form>';
+ dialog.innerHTML='<form id="loginForm"><div class="eyebrow">CONNECT YOUR TEAM</div><h2>Same service. Wherever you prepare.</h2><p>Sign in the same way at home and at church to share setlists. Your local copy remains available offline.</p><div id="googleBox" class="google-box" hidden><button id="googleSignIn" class="primary" type="button">Sign in with Google</button><p id="googleNote" class="subtle">Use the same Google account on each computer. WorshipUI keeps setlists in a private app area of that Google Drive.</p><p class="subtle">Or sign in to a WorshipUI server:</p></div><label>Username<input id="syncUsername" autocomplete="username" required></label><label>Password<input id="syncPassword" type="password" autocomplete="current-password" required></label><p id="loginError" role="alert"></p><div class="dialog-actions"><button id="closeLogin" type="button">Cancel</button><button class="primary" type="submit">Sign in</button></div></form>';
  document.body.append(dialog);
  const review=document.createElement('dialog');review.id='reviewDialog';
  review.innerHTML='<div class="eyebrow">REVIEW BEFORE APPLYING</div><h2 id="reviewTitle">Service update</h2><p id="reviewMeta"></p><ul id="changeList"></ul><div class="revision-comparison"><section><h3>Your local copy</h3><pre id="localText"></pre></section><section><h3>Shared version</h3><pre id="remoteText"></pre></section></div><p>Your current projection stays unchanged. A recovery copy is saved before replacing your local service.</p><div class="dialog-actions"><button id="later">Later</button><button id="keepLocal">Keep local & publish</button><button class="primary" id="acceptRemote">Use shared version</button></div>';
@@ -209,11 +209,28 @@
    if(!meta.live)sync();
  };
  $('publish').onclick=publish;
+ // Google sign-in (installed app): signing in or out also switches where the desktop app syncs.
+ async function googleStatus(){try{return window.worshipDesktop?.googleStatus?await window.worshipDesktop.googleStatus():null}catch{return null}}
  $('connect').onclick=async()=>{
+   const google=await googleStatus();
    if(identity){
+     if(google?.email){await window.worshipDesktop.googleSignOut();identity=null;connected=false;status('Signed out of Google · setlists kept on this computer');label();return}
      try{await api('/api/logout',{method:'POST',body:'{}'});identity=null;connected=false;status('Signed out · downloaded service kept on this computer');label()}
      catch{status('Unable to sign out while offline. Retry when connected.')}
-   }else dialog.showModal();
+   }else{
+     $('googleBox').hidden=!google;$('googleSignIn').disabled=!google?.configured;
+     if(google&&!google.configured)$('googleNote').textContent='Google sign-in is not set up in this copy of WorshipUI yet (see GOOGLE-SETUP.md).';
+     $('loginError').textContent='';dialog.showModal();
+   }
+ };
+ $('googleSignIn').onclick=async()=>{
+   $('loginError').textContent='Finish signing in in your web browser…';$('googleSignIn').disabled=true;
+   try{
+     await window.worshipDesktop.googleSignIn();
+     const user=await api('/api/me');
+     identity=user;meta.username=user.username;meta.role=user.role;saveMeta();label();dialog.close();await sync();
+   }catch(error){$('loginError').textContent=String(error.message||'').replace(/^Error invoking remote method '[^']+': (Error: )?/,'')||'Google sign-in did not finish.'}
+   finally{$('googleSignIn').disabled=false}
  };
  $('closeLogin').onclick=()=>{dialog.close();$('syncPassword').value=''};
  $('loginForm').onsubmit=async event=>{
@@ -279,7 +296,7 @@
    }else if('serviceWorker' in navigator){
      try{
        await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;
-       const cache=await caches.open('worshipui-shell-v31');const files=['/','/index.html','/app.js','/content-import.js','/bible-search.js','/assets/bibles/kjv.vpl.txt','/assets/bibles/web.vpl.txt','/assets/bibles/rv1909.vpl.txt','/style.css','/sync-core.js','/sync.js','/i18n.js','/desktop-ui.js','/slide-template.cjs','/assets/fonts/Inter.ttf','/assets/fonts/Montserrat.ttf','/assets/fonts/Lato.ttf','/assets/fonts/Merriweather.ttf','/assets/fonts/PlayfairDisplay.ttf','/assets/fonts/Oswald.ttf','/assets/fonts/Poppins.ttf','/assets/fonts/SourceSans3.ttf'];
+       const cache=await caches.open('worshipui-shell-v32');const files=['/','/index.html','/app.js','/content-import.js','/bible-search.js','/assets/bibles/kjv.vpl.txt','/assets/bibles/web.vpl.txt','/assets/bibles/rv1909.vpl.txt','/style.css','/sync-core.js','/sync.js','/i18n.js','/desktop-ui.js','/slide-template.cjs','/assets/fonts/Inter.ttf','/assets/fonts/Montserrat.ttf','/assets/fonts/Lato.ttf','/assets/fonts/Merriweather.ttf','/assets/fonts/PlayfairDisplay.ttf','/assets/fonts/Oswald.ttf','/assets/fonts/Poppins.ttf','/assets/fonts/SourceSans3.ttf'];
        const ready=(await Promise.all(files.map(file=>cache.match(file)))).every(Boolean);
        $('offlineStatus').textContent=ready?'✓ App downloaded · text service available offline':'Offline download incomplete · keep this window open';
      }catch{$('offlineStatus').textContent='Offline app download unavailable · keep this window open'}

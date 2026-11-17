@@ -21,6 +21,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Add Google sign-in settings (from the GOOGLE_CLIENT_JSON secret, if set)
+        shell: bash
+        env:
+          GOOGLE_CLIENT_JSON: ${{ secrets.GOOGLE_CLIENT_JSON }}
+        run: if [ -n "$GOOGLE_CLIENT_JSON" ]; then printf "%s" "$GOOGLE_CLIENT_JSON" > desktop/google-client.json; fi
       - run: npm run build:win
       - uses: actions/upload-artifact@v4
         with:
@@ -39,6 +44,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Add Google sign-in settings (from the GOOGLE_CLIENT_JSON secret, if set)
+        shell: bash
+        env:
+          GOOGLE_CLIENT_JSON: ${{ secrets.GOOGLE_CLIENT_JSON }}
+        run: if [ -n "$GOOGLE_CLIENT_JSON" ]; then printf "%s" "$GOOGLE_CLIENT_JSON" > desktop/google-client.json; fi
       - run: npm run build:mac
       - uses: actions/upload-artifact@v4
         with:

@@ -1,4 +1,5 @@
-import {app,BrowserWindow,ipcMain,dialog,shell,screen,clipboard,Menu} from 'electron';
+import {app,BrowserWindow,ipcMain,dialog,shell,screen,clipboard,Menu,safeStorage} from 'electron';
+import {signIn as googleSignIn,createTokens,createDrive,createGoogleApi} from './google.mjs';
 import {readFileSync,writeFileSync,existsSync,renameSync,mkdirSync,rmSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import path from 'node:path';
@@ -24,6 +25,31 @@ else {
   if(existsSync(settingsFile))settings={origin:sharedOrigin(JSON.parse(readFileSync(settingsFile,'utf8')).origin||'')};
   store=openDeviceStore(path.join(app.getPath('userData'),'workspace'));
   host=await createDesktopHost(root,settings.origin);
+  // Home sync with Google. The church's Google Cloud OAuth client (desktop/google-client.json, see GOOGLE-SETUP.md)
+  // enables it; the saved sign-in is encrypted with the operating system's protection (safeStorage).
+  const googleClient=(()=>{try{const c=JSON.parse(readFileSync(path.join(here,'google-client.json'),'utf8'));return typeof c.client_id==='string'&&c.client_id?c:null}catch{return null}})();
+  const googleFile=path.join(app.getPath('userData'),'google-signin.json');
+  let googleEmail='';
+  function useGoogle(refreshToken,email,initial=null){
+   googleEmail=email;host.setLocalApi(createGoogleApi(createDrive(createTokens(googleClient,refreshToken,{initial})),email));
+  }
+  if(googleClient&&existsSync(googleFile)&&safeStorage.isEncryptionAvailable()){
+   try{const saved=JSON.parse(readFileSync(googleFile,'utf8'));useGoogle(safeStorage.decryptString(Buffer.from(saved.token,'base64')),saved.email)}catch{}
+  }
+  ipcMain.handle('wui:google-status',event=>{if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');return {configured:!!googleClient,email:googleEmail}});
+  ipcMain.handle('wui:google-signin',async event=>{
+   if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');
+   if(!googleClient)throw Error('Google sign-in is not set up in this copy of WorshipUI yet. See GOOGLE-SETUP.md.');
+   if(!safeStorage.isEncryptionAvailable())throw Error('This computer cannot store the Google sign-in securely.');
+   const result=await googleSignIn(googleClient,url=>shell.openExternal(url));
+   writeFileSync(googleFile,JSON.stringify({email:result.email,token:safeStorage.encryptString(result.refreshToken).toString('base64')}),{mode:0o600});
+   useGoogle(result.refreshToken,result.email,result);main.focus();
+   return {email:result.email};
+  });
+  ipcMain.handle('wui:google-signout',event=>{
+   if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');
+   rmSync(googleFile,{force:true});googleEmail='';host.setLocalApi(null);
+  });
   // Livestream overlay for OBS, fed from the live slide, the stream settings and the CCLI numbers.
   const stored=key=>{try{return JSON.parse(store.getItem(key)||'null')}catch{return null}};
   let stream=null,streamError='',streamKey='';
