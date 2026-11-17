@@ -26,6 +26,7 @@
                                 "content-import.js",
                                 "bible-search.js",
                                 "sync.js",
+                                "i18n.js",
                                 "sync-core.js",
                                 "desktop-ui.js",
                                 "style.css",

@@ -42,8 +42,37 @@
    $('connect').textContent=identity?'Sign out':'Connect';
    $('syncIdentity').textContent=identity?identity.username+' · '+identity.role:(meta.username?'Offline copy · '+meta.username:'');
    $('dateStatus').textContent=bridge.getDate()?'Setlist: '+bridge.getDate():'Undated service';
+   renderSetlists();
    bridge.setRole(meta.role||'operator');
  }
+ // Saved dated setlists under the calendar, newest first: click to open, × to delete (not the open one).
+ function renderSetlists(){
+   const entries=bridge.getDateEntries(),active=bridge.getDate(),list=$('savedSetlists');
+   const dates=Object.keys(entries).filter(date=>date!=='undated').sort().reverse();
+   const locale=window.WorshipI18n?.language()==='es'?'es':'en';
+   list.replaceChildren();
+   dates.forEach(date=>{
+     const row=document.createElement('div');row.className='setlist-row'+(date===active?' active':'');
+     const open=document.createElement('button');open.type='button';open.className='setlist-open';
+     const day=new Date(date+'T12:00:00').toLocaleDateString(locale,{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+     const name=document.createElement('strong');name.textContent=day;
+     const title=document.createElement('small');title.textContent=entries[date].service.title||'';
+     open.append(name,title);open.title=date;open.disabled=date===active;open.onclick=()=>openDate(date,false);
+     row.append(open);
+     if(date!==active){
+       const remove=document.createElement('button');remove.type='button';remove.className='setlist-delete';remove.textContent='×';
+       remove.setAttribute('aria-label','Delete setlist '+date);remove.title='Delete setlist '+date;
+       remove.onclick=()=>{
+         if(busy){status('Wait for the current sync to finish before changing dates.');return}
+         if(!confirm('Delete the setlist for '+day+' from this computer? A recovery copy is kept (Download recovery), and a copy already shared to the server stays there.'))return;
+         if(bridge.deleteDate(date)){status('Setlist '+date+' deleted from this computer');label()}
+       };
+       row.append(remove);
+     }
+     list.append(row);
+   });
+ }
+ window.addEventListener('worship:language',()=>renderSetlists());
  async function api(url,options={}){
    const response=await fetch(url,{...options,headers:{'Content-Type':'application/json',...options.headers},cache:'no-store',signal:AbortSignal.timeout(10000)});
    let body;try{body=await response.json()}catch{throw Error('Shared server unavailable. Local service is ready.')}
@@ -201,10 +230,21 @@
    }catch(error){status(error.message)}finally{busy=false;label()}
  };
  $('closeHistory').onclick=()=>history.close();
+ function confirmLeave(date,copy){
+   if(!copy&&date===bridge.getDate())return true;
+   const reasons=[];
+   if(bridge.saveFailed())reasons.push('Your latest changes could not be saved on this computer. Use Back up first to keep them.');
+   if((identity||meta.username)&&meta.baseService&&dirty())reasons.push('This setlist has changes that are not on the shared server yet. They stay saved here and publish when you are connected.');
+   if(pending)reasons.push('A shared update for this setlist is waiting for your review.');
+   return !reasons.length||confirm(reasons.join('\n\n')+'\n\nSwitch setlists anyway?');
+ }
  function openDate(date,copy){
    if(busy){status('Wait for the current sync to finish before changing dates.');return}
    if(meta.live){status('Leave Live mode before changing setlist dates.');return}
    if(bridge.editing()){status('Finish editing before changing setlist dates.');return}
+   // Warn before leaving a setlist whose latest edit failed to save, whose changes are not yet on the shared server,
+   // or that has a shared update waiting for review. Local edits are otherwise saved and stay with that date.
+   if(!confirmLeave(date,copy))return;
    if(copy&&bridge.getDateEntry(date)&&!confirm('Replace the local setlist for this date with a copy of the current service? The shared version may require review.'))return;
    if(!bridge.openDate(date,copy,meta)){status('Choose a valid date and check device storage.');return}
    const entry=bridge.getDateEntry(date);meta.baseRevision=entry.baseRevision;meta.baseService=entry.baseService;
@@ -239,7 +279,7 @@
    }else if('serviceWorker' in navigator){
      try{
        await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;
-       const cache=await caches.open('worshipui-shell-v19');const files=['/','/index.html','/app.js','/content-import.js','/bible-search.js','/assets/bibles/kjv.vpl.txt','/assets/bibles/web.vpl.txt','/assets/bibles/rv1909.vpl.txt','/style.css','/sync-core.js','/sync.js','/desktop-ui.js','/slide-template.cjs','/assets/fonts/Inter.ttf','/assets/fonts/Montserrat.ttf','/assets/fonts/Lato.ttf','/assets/fonts/Merriweather.ttf','/assets/fonts/PlayfairDisplay.ttf','/assets/fonts/Oswald.ttf','/assets/fonts/Poppins.ttf','/assets/fonts/SourceSans3.ttf'];
+       const cache=await caches.open('worshipui-shell-v29');const files=['/','/index.html','/app.js','/content-import.js','/bible-search.js','/assets/bibles/kjv.vpl.txt','/assets/bibles/web.vpl.txt','/assets/bibles/rv1909.vpl.txt','/style.css','/sync-core.js','/sync.js','/i18n.js','/desktop-ui.js','/slide-template.cjs','/assets/fonts/Inter.ttf','/assets/fonts/Montserrat.ttf','/assets/fonts/Lato.ttf','/assets/fonts/Merriweather.ttf','/assets/fonts/PlayfairDisplay.ttf','/assets/fonts/Oswald.ttf','/assets/fonts/Poppins.ttf','/assets/fonts/SourceSans3.ttf'];
        const ready=(await Promise.all(files.map(file=>cache.match(file)))).every(Boolean);
        $('offlineStatus').textContent=ready?'✓ App downloaded · text service available offline':'Offline download incomplete · keep this window open';
      }catch{$('offlineStatus').textContent='Offline app download unavailable · keep this window open'}

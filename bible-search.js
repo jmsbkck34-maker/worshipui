@@ -65,16 +65,39 @@
  ];
  // bible.com uses USFM book codes, which differ from this data set for some books.
  const usfm={SOL:'SNG',EZE:'EZK',JOE:'JOL',NAH:'NAM',MAR:'MRK',JOH:'JHN',PHI:'PHP',JAM:'JAS','1JO':'1JN','2JO':'2JN','3JO':'3JN'};
+ // Book id from a bible.com (USFM) code such as "JHN" or "PSA".
+ function usfmBook(code){const upper=String(code).toUpperCase();return Object.entries(usfm).find(([,u])=>u===upper)?.[0]||(bookNames.has(upper)?upper:null)}
  function youVersionUrl(version,book,chapter,first,last){
   const code=usfm[book]||book;
   return 'https://www.bible.com/bible/'+version.id+'/'+code+'.'+chapter+'.'+first+(last>first?'-'+last:'')+'.'+version.abbr;
+ }
+ // Which passage was copied from bible.com: the share link when present, otherwise a "John 3:16-17 NIV" line.
+ // Returns {book, chapter, first, last, abbr} or null.
+ function youVersionReference(text){
+  const clean=String(text||'').replace(/[‎‏‪-‮⁦-⁩]/g,'');
+  const link=clean.match(/bible\.com\/bible\/\d+\/([1-3A-Za-z]{3})\.(\d+)\.(\d+)(?:-(\d+))?\.([A-Za-z0-9]+)/i);
+  if(link){
+   const code=link[1].toUpperCase(),book=Object.entries(usfm).find(([,u])=>u===code)?.[0]||(bookNames.has(code)?code:null);
+   if(book)return {book,chapter:Number(link[2]),first:Number(link[3]),last:Number(link[4]||link[3]),abbr:link[5].toUpperCase()};
+  }
+  const line=clean.match(/(?:^|\n|\s)([1-3]?\s?[A-Za-zÀ-ÿ]+(?: [A-Za-zÀ-ÿ]+){0,3}) (\d+):(\d+)(?:\s*[-–]\s*(\d+))?(?:\s+([A-Z0-9]{2,10}))?\s*$/m);
+  if(line){
+   const book=bookId(line[1]);
+   if(book)return {book,chapter:Number(line[2]),first:Number(line[3]),last:Number(line[4]||line[3]),abbr:line[5]||''};
+  }
+  return null;
  }
  // Text copied from bible.com: remove direction marks and quotes, drop a trailing "John 3:16 NIV" reference,
  // then split on the expected verse numbers when they are present ("16 For God… 17 For God…").
  function pastedPassage(text,numbers){
   let clean=String(text||'').replace(/[‎‏‪-‮⁦-⁩]/g,'').replace(/\r\n?/g,'\n').trim();
+  // bible.com adds a share link line ("https://bible.com/bible/111/jhn.3.16-17.NIV"); it is metadata, not text.
+  clean=clean.split('\n').filter(line=>!/^\s*(?:https?:\/\/)?(?:www\.)?bible\.com\/\S*\s*$/i.test(line)).join('\n').trim();
+  clean=clean.replace(/^[1-3]?\s?[A-Za-zÀ-ÿ ]+\s\d+:\d+(?:[-–]\d+)?(?:\s+[A-Z0-9]{2,10})?\s*\n/,'').trim();
   clean=clean.replace(/\s*\n?[1-3]?\s?[A-Za-zÀ-ÿ ]+\s\d+:\d+(?:[-–]\d+)?(?:\s+[A-Z0-9]{2,10})?\s*$/,'').trim();
   clean=clean.replace(/^[“"]+|[”"]+$/g,'').trim();
+  // "Share → Copy link" or the address bar gives only the link, with no verse text.
+  if(!clean&&/bible\.com\/bible\//i.test(String(text)))throw Error('Only the bible.com link was copied. On bible.com, click the verses to highlight them, then choose Copy.');
   if(!clean)throw Error('Paste the passage copied from YouVersion first.');
   if(numbers.length>1){
    const parts=[];let rest=clean,ok=true;
@@ -93,5 +116,5 @@
   if(numbers.length===1)clean=clean.replace(new RegExp('^'+numbers[0]+'\\s+'),'');
   return {perVerse:numbers.length===1,slides:[clean.replace(/[ \t]+/g,' ').trim()]};
  }
- root.WorshipBible={parse,books,bookName,bookId,slideReferences,chapters,verseNumbers,passage,parallel,versions,languages,youVersions,youVersionUrl,pastedPassage};
+ root.WorshipBible={usfmBook,parse,books,bookName,bookId,slideReferences,youVersionReference,chapters,verseNumbers,passage,parallel,versions,languages,youVersions,youVersionUrl,pastedPassage};
 })(globalThis);

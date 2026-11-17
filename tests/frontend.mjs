@@ -300,6 +300,46 @@ export async function frontendTests(){
  const spanishMain=es.context.worshipWorkspace.getService().items.at(-1);
  check(spanishMain.title,'Juan 3:16 · RVR1909');check(spanishMain.secondaryVersion,'KJV');check(spanishMain.secondarySlides[0].endsWith('John 3:16 · KJV'),true);
  es.node('langEn').onclick();check(JSON.parse(es.storage.get('worshipui.language.v1')).mainLanguage,'en');check(es.node('bibleVersion').value,'KJV');
+ // Screen setup keeps each screen's display when its language choice changes; without the desktop app it explains dragging.
+ const setup=await client('operator',false,new Map([[key,JSON.stringify(initial)],[metaKey,JSON.stringify({baseRevision:1,baseService:initial,live:false,role:'operator',username:'operator'})],['worshipui.screens.v1',JSON.stringify({version:1,screens:[{show:'both',display:7},{show:'both'}],stage:{display:9}})]]));
+ setup.node('screen1Show').value='first';setup.node('screen1Show').onchange();
+ check(JSON.parse(setup.storage.get('worshipui.screens.v1')),{version:1,screens:[{show:'first',display:7},{show:'both'}],stage:{display:9}});
+ setup.node('screenSetup').onclick();await settle();
+ check(setup.node('screensStatus').textContent.startsWith('Display placement is available in the installed app'),true);check(setup.node('audience1Show').value,'first');
+ setup.node('stageDisplay').value='';setup.node('stageDisplay').onchange();check(JSON.parse(setup.storage.get('worshipui.screens.v1')).stage,undefined);
+ // Saved setlists under the calendar: newest first, click to open, delete (except the open one) with a recovery copy.
+ const entry=title=>({service:{title,items:[]},baseRevision:0,baseService:{title,items:[]}});
+ const savedLibrary={version:1,active:'2026-11-22',entries:{undated:entry('Undated'),'2026-11-22':entry('Advent 1'),'2026-11-29':entry('Advent 2'),'2026-11-15':entry('Thanksgiving')}};
+ const dates=await client('operator',false,new Map([[metaKey,JSON.stringify({baseRevision:0,baseService:null,live:false,role:'operator',username:'operator'})],['worshipui.setlists.v1',JSON.stringify(savedLibrary)]]));
+ dates.context.worshipWorkspace.setRole('operator');dates.node('liveMode').onclick();dates.node('liveMode').onclick();
+ const rows=()=>dates.node('savedSetlists').children;
+ check(rows().map(row=>row.children[0].title),['2026-11-29','2026-11-22','2026-11-15']);
+ check(rows()[1].children.length,1);check(rows()[0].children[0].children[1].textContent,'Advent 2');
+ rows()[0].children[0].onclick();check(dates.context.worshipWorkspace.getDate(),'2026-11-29');check(dates.context.worshipWorkspace.getService().title,'Advent 2');
+ rows()[2].children[1].onclick();
+ check(Object.keys(JSON.parse(dates.storage.get('worshipui.setlists.v1')).entries).sort(),['2026-11-22','2026-11-29','undated']);
+ check(JSON.parse(dates.storage.get('worshipui.recovery.v1')).at(-1).service.title,'Thanksgiving');
+ check(rows().map(row=>row.children[0].title),['2026-11-29','2026-11-22']);
+ // Switching setlists warns about changes not yet on the shared server; cancelling stays put.
+ const unpublished={version:1,active:'2026-11-22',entries:{undated:entry('Undated'),'2026-11-22':{service:{title:'Edited offline',items:[]},baseRevision:3,baseService:{title:'Shared copy',items:[]}},'2026-11-29':entry('Advent 2')}};
+ const leave=await client('operator',false,new Map([[metaKey,JSON.stringify({baseRevision:3,baseService:{title:'Shared copy',items:[]},live:false,role:'operator',username:'operator'})],['worshipui.setlists.v1',JSON.stringify(unpublished)]]));
+ leave.context.worshipWorkspace.setRole('operator');leave.node('liveMode').onclick();leave.node('liveMode').onclick();
+ let prompt='';leave.context.confirm=message=>{prompt=message;return false};
+ leave.node('savedSetlists').children[0].children[0].onclick();
+ check(prompt.includes('not on the shared server yet'),true);check(prompt.endsWith('Switch setlists anyway?'),true);check(leave.context.worshipWorkspace.getDate(),'2026-11-22');
+ leave.context.confirm=()=>true;leave.node('savedSetlists').children[0].children[0].onclick();check(leave.context.worshipWorkspace.getDate(),'2026-11-29');
+ // Without changes, no prompt.
+ prompt='';leave.context.confirm=message=>{prompt=message;return true};leave.node('savedSetlists').children[1].children[0].onclick();check(prompt,'');
+ // Copied YouVersion text moves the passage selectors to what was copied and previews the slides.
+ const flow=await client('operator',false);
+ flow.node('add').onclick();flow.node('typeInput').value='Scripture';await flow.node('typeInput').onchange();await settle();
+ flow.node('bibleVersion').value='YOUVERSION';await flow.node('bibleVersion').onchange();
+ flow.node('youVersionText').value='1 The LORD is my shepherd; I shall not want. 2 He makes me lie down in green pastures.\nPsalm 23:1-2 ESV\n\nhttps://bible.com/bible/59/psa.23.1-2.ESV';
+ flow.node('youVersionText').oninput();
+ check([flow.node('bibleBook').value,flow.node('bibleChapter').value,flow.node('bibleFirst').value,flow.node('bibleLast').value,flow.node('youVersionId').value],['PSA','23','1','2','ESV']);
+ check(flow.node('youVersionPreview').hidden,false);check(flow.node('youVersionPreview').children[0].textContent,'2 slides · Psalms 23:1-2 · ESV');
+ await flow.node('addBiblePassage').onclick();
+ check(flow.context.worshipWorkspace.getService().items.at(-1).slides,['The LORD is my shepherd; I shall not want.\nPsalms 23:1 · ESV','He makes me lie down in green pastures.\nPsalms 23:2 · ESV']);
  const remoteEditor=await client('editor',false);remoteEditor.node('slides').children[1].onclick();remoteEditor.node('slides').children[1].onclick();check(remoteEditor.storage.has(liveKey),false);
  return checks;
 }

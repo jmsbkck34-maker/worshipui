@@ -30,7 +30,8 @@ export function openDeviceStore(directory){
    if(key==='worshipui.ccli.v1'&&!validCcliSettings(parsed))throw Error('Invalid CCLI settings');
    if(key==='worshipui.setlists.v1'&&!validLibrary(parsed))throw Error('Invalid setlist library');
    if(key==='worshipui.branding.v1'&&!SlideTemplate.validBrandingRecord(parsed))throw Error('Invalid branding');
-   if(key==='worshipui.screens.v1'&&!(parsed&&parsed.version===1&&Array.isArray(parsed.screens)&&parsed.screens.length===2&&parsed.screens.every(screen=>screen&&['both','first','second'].includes(screen.show))))throw Error('Invalid screen settings');
+   if(key==='worshipui.screens.v1'&&!(parsed&&parsed.version===1&&Array.isArray(parsed.screens)&&parsed.screens.length===2&&parsed.screens.every(screen=>screen&&['both','first','second'].includes(screen.show)&&(screen.display===undefined||Number.isSafeInteger(screen.display)))&&
+    (parsed.stage===undefined||!!parsed.stage&&typeof parsed.stage==='object'&&(parsed.stage.display===undefined||Number.isSafeInteger(parsed.stage.display)))))throw Error('Invalid screen settings');
    if(key==='worshipui.language.v1'&&!(parsed&&parsed.version===1&&typeof parsed.secondLanguage==='string'&&/^[a-z]{2,3}$/.test(parsed.secondLanguage)&&(parsed.mainLanguage===undefined||['en','es'].includes(parsed.mainLanguage))))throw Error('Invalid language setting');
    if(key==='worshipui.songs.v1'&&(!parsed||parsed.version!==1||!Array.isArray(parsed.songs)||parsed.songs.length>10000||new Set(parsed.songs.map(song=>song?.id)).size!==parsed.songs.length||parsed.songs.some(song=>!song||song.type!=='Song'||!validService({title:'',items:[song]}))))throw Error('Invalid song library');
    const next={...values,[key]:value};

@@ -113,11 +113,18 @@ function paint(el,text,theme,black=false,template,options={}){
  el.fitScripture=!black&&!!options.fitText;scheduleFit();
 }
 function toast(t){$('toast').textContent=t;$('toast').style.display='block';clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('toast').style.display='none',3500)}
-function persist(){try{storeService(service);$('saveState').textContent='Saved on this device';window.dispatchEvent(new Event('worship:changed'));return true}catch{$('saveState').textContent='Not saved — export a backup';toast('Storage unavailable. Export your service to keep a copy.');return false}}
+// saveFailed stays true until a later save succeeds, so switching setlists can warn about unsaved work.
+let saveFailed=false;
+function persist(){try{storeService(service);saveFailed=false;$('saveState').textContent='Saved on this device';window.dispatchEvent(new Event('worship:changed'));return true}catch{saveFailed=true;$('saveState').textContent='Not saved — export a backup';toast('Storage unavailable. Export your service to keep a copy.');return false}}
 function current(){return service.items.find(i=>i.id===selected)}
 // Audience screens: each screen shows both languages, the first only, or the second only.
 const SCREENS='worshipui.screens.v1',SCREEN_SHOWS=['both','first','second'];
-function validScreens(value){return value&&value.version===1&&Array.isArray(value.screens)&&value.screens.length===2&&value.screens.every(screen=>screen&&SCREEN_SHOWS.includes(screen.show))}
+// Each audience screen: what it shows and, optionally, the display it opens on; the stage window may have a display too.
+function validScreens(value){
+ const display=entry=>entry.display===undefined||Number.isSafeInteger(entry.display);
+ return value&&value.version===1&&Array.isArray(value.screens)&&value.screens.length===2&&value.screens.every(screen=>screen&&SCREEN_SHOWS.includes(screen.show)&&display(screen))&&
+  (value.stage===undefined||!!value.stage&&typeof value.stage==='object'&&display(value.stage));
+}
 function readScreens(){const saved=read(SCREENS,null);return validScreens(saved)?saved:{version:1,screens:[{show:'both'},{show:'both'}]}}
 function languageView(o,show){
  if(show==='first')return {...o,secondaryText:'',nextSecondaryText:''};
@@ -437,6 +444,7 @@ if(mode==='audience'||mode==='stage'){
   fillBibleOptions('bibleFirst',verses,$('bibleFirst').value);
   fillBibleOptions('bibleLast',verses.filter(verse=>verse>=Number($('bibleFirst').value)),$('bibleLast').value);
   $('addBiblePassage').disabled=!verses.length;
+  renderYouVersionPreview();
  }
  function updateBibleChapters(){
   fillBibleOptions('bibleChapter',WorshipBible.chapters(bibleData,$('bibleBook').value),$('bibleChapter').value);updateBibleVerses();
@@ -477,7 +485,8 @@ if(mode==='audience'||mode==='stage'){
  function usingYouVersion(){return $('bibleVersion').value===YOUVERSION}
  function youVersion(){return WorshipBible.youVersions.find(v=>v.abbr===$('youVersionId').value)||WorshipBible.youVersions[0]}
  function mainLanguage(){return usingYouVersion()?youVersion().language||'en':bibleVersion().language}
- function mainVersionId(){return usingYouVersion()?youVersion().abbr:bibleVersion().id}
+ // A copied passage can name a translation that is not in the list (e.g. "NASB2020"); its label is then used as-is.
+ function mainVersionId(){return usingYouVersion()?(pastedAbbr||youVersion().abbr):bibleVersion().id}
  fillBibleOptions('secondLanguage',WorshipBible.languages.filter(language=>language.id!=='en'),languageSettings().secondLanguage);
  $('secondLanguage').onchange=()=>{
   if(saveLanguageSettings({secondLanguage:$('secondLanguage').value}))$('secondLanguageStatus').textContent='Second language saved on this device.';
@@ -492,7 +501,7 @@ if(mode==='audience'||mode==='stage'){
  }
  function setServiceLanguage(main){
   if(main===serviceLanguage()||!saveLanguageSettings({mainLanguage:main}))return;
-  renderLanguageToggle();renderVersionChoices();
+  renderLanguageToggle();renderVersionChoices();window.WorshipI18n?.setLanguage(main);window.dispatchEvent(new Event('worship:language'));
   if(!$('bibleTools').hidden)prepareBible();else renderSecondOption();
   toast(main==='es'?'Idioma principal: Español · second language: English':'Main language: English · second language: '+secondLanguage().name);
  }
@@ -537,6 +546,7 @@ if(mode==='audience'||mode==='stage'){
  async function prepareBible(){
   const version=bibleVersion();renderSecondOption();
   $('youVersionTools').hidden=!usingYouVersion();
+  const inApp=!!window.worshipDesktop?.captureBible;$('youVersionStepFind').hidden=!inApp;$('youVersionStepUse').hidden=!inApp;
   $('addBiblePassage').textContent=usingYouVersion()?'Add pasted passage':'Add selected passage';
   if(bibleData&&bibleDataId===version.id){fillBibleOptions('bibleBook',WorshipBible.books(mainLanguage()),$('bibleBook').value);updateBibleChapters();return}
   $('bibleStatus').textContent='Loading the '+version.id+'…';$('addBiblePassage').disabled=true;
@@ -548,19 +558,111 @@ if(mode==='audience'||mode==='stage'){
    $('bibleStatus').textContent='Choose a book, chapter and verse range. When editing, selection fills the item for review.';
   }catch(error){$('bibleStatus').textContent=error.message||'Could not load the '+version.id+'.'}
  }
- $('bibleVersion').onchange=()=>prepareBible();$('youVersionId').onchange=()=>prepareBible();
- // Opens the selected passage on bible.com in the system browser.
- $('openYouVersion').onclick=()=>{
+ $('bibleVersion').onchange=()=>prepareBible();$('youVersionId').onchange=()=>{pastedAbbr='';prepareBible();renderYouVersionPreview()};
+ // YouVersion flow: open the passage on bible.com; when the operator copies verses there and comes back,
+ // the copied text is picked up, the passage selectors follow what was copied, and a preview shows the slides.
+ let youVersionOpenedAt=0,clipboardBefore='',pastedAbbr='';
+ async function readClipboard(){
+  if(window.worshipDesktop?.readClipboard)return window.worshipDesktop.readClipboard();
+  return navigator.clipboard?.readText?navigator.clipboard.readText():'';
+ }
+ $('openYouVersion').onclick=async()=>{
   if(!bibleData)return;
   const first=Number($('bibleFirst').value),last=Math.max(first,Number($('bibleLast').value));
   const url=WorshipBible.youVersionUrl(youVersion(),$('bibleBook').value,Number($('bibleChapter').value),first,last);
-  $('bibleStatus').textContent='Copy the verses on bible.com (with verse numbers), then paste them below.';
+  // Remember what was already on the clipboard so only newly copied verses are picked up.
+  try{clipboardBefore=await readClipboard()}catch{clipboardBefore=''}
+  youVersionOpenedAt=Date.now();
+  // Installed app: bible.com opens in a WorshipUI window showing the whole chapter, ready for "Use these verses".
+  if(window.worshipDesktop?.openBible){
+   $('bibleStatus').textContent='In the bible.com window, choose the translation, then click Use these verses.';
+   window.worshipDesktop.openBible(url.replace(/\.(\d+)\.\d+(?:-\d+)?\.([A-Za-z0-9]+)$/,'.$1.$2')).catch(error=>{$('bibleStatus').textContent=cleanError(error)||'Could not open YouVersion.'});
+   return;
+  }
+  $('bibleStatus').textContent='Copy the verses on bible.com, then come back to WorshipUI.';
   if(window.worshipDesktop?.openYouVersion)window.worshipDesktop.openYouVersion(url).catch(error=>{$('bibleStatus').textContent=error.message||'Could not open YouVersion.'});
   else if(!window.open(url,'_blank','noopener'))$('bibleStatus').textContent='Allow pop-ups to open YouVersion.';
-
  };
+ // Put copied text in the box and move the selectors to the passage that was actually copied.
+ function useCopiedText(text){
+  $('youVersionText').value=text;
+  const reference=WorshipBible.youVersionReference(text);
+  if(reference&&bibleData){
+   $('bibleBook').value=reference.book;updateBibleChapters();
+   $('bibleChapter').value=String(reference.chapter);updateBibleVerses();
+   $('bibleFirst').value=String(reference.first);updateBibleVerses();$('bibleLast').value=String(reference.last);
+   const known=WorshipBible.youVersions.find(v=>v.abbr===reference.abbr);
+   if(known){$('youVersionId').value=known.abbr;pastedAbbr=''}else pastedAbbr=reference.abbr;
+  }
+  return renderYouVersionPreview();
+ }
+ // Preview of the slides the copied text will make; Add is enabled only when it can be used.
+ function renderYouVersionPreview(){
+  fillFromCapture();
+  const preview=$('youVersionPreview'),text=$('youVersionText').value.trim();
+  if(!usingYouVersion()||!text||!bibleData){preview.hidden=true;return false}
+  preview.hidden=false;preview.replaceChildren();
+  try{
+   const result=WorshipBible.passage(bibleData,$('bibleBook').value,Number($('bibleChapter').value),Number($('bibleFirst').value),Number($('bibleLast').value),mainLanguage());
+   const pasted=WorshipBible.pastedPassage(text,result.verses.map(v=>v.verse));
+   const heading=document.createElement('strong');
+   // The "All verses on one slide" layout combines the verses into a single slide.
+   const slideCount=pasted.perVerse&&$('bibleLayout').value==='combined'&&pasted.slides.length>1?1:pasted.slides.length;
+   heading.textContent=slideCount+(slideCount===1?' slide':' slides')+' · '+result.reference+' · '+mainVersionId();
+   preview.append(heading);
+   pasted.slides.slice(0,3).forEach((slide,n)=>{const line=document.createElement('p');line.textContent=(pasted.perVerse?result.verseReferences[n]+' — ':'')+(slide.length>110?slide.slice(0,110)+'…':slide);preview.append(line)});
+   if(pasted.slides.length>3){const more=document.createElement('p');more.textContent='+ '+(pasted.slides.length-3)+' more';preview.append(more)}
+   if(!pasted.perVerse&&result.verses.length>1){const note=document.createElement('p');note.className='subtle';note.textContent='No verse numbers were copied, so the passage becomes one auto-fit slide.';preview.append(note)}
+   $('addBiblePassage').disabled=false;return true;
+  }catch(error){const problem=document.createElement('p');problem.textContent=error.message;preview.append(problem);$('addBiblePassage').disabled=true;return false}
+ }
+ $('youVersionText').oninput=()=>{captured=null;const reference=WorshipBible.youVersionReference($('youVersionText').value);if(reference)useCopiedText($('youVersionText').value);else renderYouVersionPreview()};
+ function cleanError(error){return String(error?.message||'').replace(/^Error invoking remote method '[^']+': (Error: )?/,'')}
+ // Verses brought in from the bible.com window: {book, chapter, abbr, verses:{16:'text',…}}.
+ let captured=null;
+ // Write the captured verses for the selected range into the box in the "16 text 17 text" form the parser splits.
+ function fillFromCapture(){
+  if(!captured||!usingYouVersion()||captured.book!==$('bibleBook').value||captured.chapter!==Number($('bibleChapter').value))return;
+  const first=Number($('bibleFirst').value),last=Math.max(first,Number($('bibleLast').value)),parts=[];
+  for(let verse=first;verse<=last;verse++)if(captured.verses[verse])parts.push(verse+' '+captured.verses[verse]);
+  if(!parts.length)return;
+  $('youVersionText').value=parts.join(' ')+'\n'+WorshipBible.bookName(captured.book)+' '+captured.chapter+':'+first+(last>first?'-'+last:'')+' '+captured.abbr;
+  const known=WorshipBible.youVersions.find(v=>v.abbr===captured.abbr);
+  if(known){$('youVersionId').value=known.abbr;pastedAbbr=''}else pastedAbbr=captured.abbr;
+ }
+ $('captureYouVersion').onclick=async()=>{
+  try{
+   const {url,verses}=await window.worshipDesktop.captureBible();
+   const page=String(url).match(/bible\/\d+\/([1-3A-Za-z]{3})\.(\d+)(?:\.(\d+)(?:-(\d+))?)?\.([A-Za-z0-9-]+)/i);
+   const book=page&&WorshipBible.usfmBook(page[1]);
+   if(!book)throw Error('Go to a Bible chapter in the bible.com window first.');
+   const chapter=Number(page[2]),prefix=page[1].toUpperCase()+'.'+chapter+'.',chapterVerses={};
+   for(const [id,text] of Object.entries(verses))if(id.startsWith(prefix))chapterVerses[Number(id.slice(prefix.length))]=text;
+   if(!Object.keys(chapterVerses).length)throw Error('No verses were found on that bible.com page. Wait for it to finish loading, then try again.');
+   captured={book,chapter,abbr:page[5].toUpperCase(),verses:chapterVerses};
+   // Follow the bible.com window if it moved to another chapter; a verse range in its address wins.
+   if($('bibleBook').value!==book||Number($('bibleChapter').value)!==chapter){$('bibleBook').value=book;updateBibleChapters();$('bibleChapter').value=String(chapter);updateBibleVerses()}
+   if(page[3]){$('bibleFirst').value=page[3];updateBibleVerses();$('bibleLast').value=page[4]||page[3]}
+   fillFromCapture();
+   $('bibleStatus').textContent=renderYouVersionPreview()?'Verses brought in from bible.com. Check the preview, then add the passage.':($('youVersionPreview').lastChild?.textContent||'');
+   if(!$('addBiblePassage').disabled)$('addBiblePassage').focus();
+  }catch(error){$('bibleStatus').textContent=cleanError(error)||'Could not read the bible.com window.'}
+ };
+ $('pasteYouVersion').onclick=async()=>{
+  try{const text=await readClipboard();if(!text.trim()){$('bibleStatus').textContent='The clipboard is empty. Copy the verses on bible.com first.';return}$('bibleStatus').textContent=useCopiedText(text)?'Copied verses added. Check the preview, then add the passage.':$('youVersionPreview').lastChild?.textContent||''}
+  catch{$('bibleStatus').textContent='Could not read the clipboard. Paste into the box instead (Ctrl+V).'}
+ };
+ // Coming back to WorshipUI after opening YouVersion (within 30 minutes) picks up newly copied verses.
+ window.addEventListener('focus',async()=>{
+  if(!youVersionOpenedAt||Date.now()-youVersionOpenedAt>1800000||!$('itemDialog').open||!usingYouVersion())return;
+  let text='';try{text=await readClipboard()}catch{return}
+  if(!text.trim()||text===clipboardBefore||text===$('youVersionText').value)return;
+  clipboardBefore=text;
+  if(useCopiedText(text)){$('bibleStatus').textContent='Copied verses picked up from YouVersion. Check the preview, then add the passage.';$('addBiblePassage').focus()}
+  else $('bibleStatus').textContent=$('youVersionPreview').lastChild?.textContent||'Copy the verses on bible.com, then come back to WorshipUI.';
+ });
  $('bibleBook').onchange=updateBibleChapters;$('bibleChapter').onchange=updateBibleVerses;
- $('bibleFirst').onchange=updateBibleVerses;
+ $('bibleFirst').onchange=updateBibleVerses;$('bibleLast').onchange=()=>renderYouVersionPreview();$('bibleLayout').onchange=()=>renderYouVersionPreview();
  $('addBiblePassage').onclick=async()=>{
   try{
     const versionId=mainVersionId();
@@ -590,12 +692,12 @@ if(mode==='audience'||mode==='stage'){
      const item={title,type:'Scripture',theme:'ember',slides,primaryVersion:versionId,...(fitted?{fitText:true}:{}),...(combined?{verseSlides:verses}:{}),
       ...(second?{secondaryVersion:second.id,secondarySlides:secondSlides,...(combined?{secondaryVerseSlides:secondVerses}:{})}:{})};
      if(window.worshipWorkspace.addItems([item])){
-      $('itemDialog').close();$('youVersionText').value='';toast(title+(second?' with '+second.id:'')+' added to the service.');
+      $('itemDialog').close();$('youVersionText').value='';captured=null;window.worshipDesktop?.closeBible?.().catch(()=>{});toast(title+(second?' with '+second.id:'')+' added to the service.');
      }
     }
   }catch(error){$('bibleStatus').textContent=error.message||'Could not add that passage.'}
  };
- function openEditor(isEdit){editing=isEdit;chosenSongStyle=null;chosenSongSlides=null;chosenScriptureFit=null;chosenVerseSlides=null;chosenSecondVerseSlides=null;addSecondLanguage=false;$('fillSecondStatus').textContent='';const i=isEdit?current():null;$('dialogTitle').textContent=isEdit?'Edit service item':'Add to your service';$('titleInput').value=i?.title||'';$('typeInput').value=i?.type||'Song';$('textInput').value=i?.slides.join('\n\n')||'';$('itemPrimaryVersion').value=i?.primaryVersion||'';$('itemSecondaryVersion').value=i?.secondaryVersion||'';$('itemSecondaryText').value=i?.secondarySlides?.join('\n\n')||'';$('songSearch').value='';$('delete').hidden=!isEdit;updateItemTranslationFields();renderSongs();$('itemDialog').showModal()}
+ function openEditor(isEdit){editing=isEdit;chosenSongStyle=null;chosenSongSlides=null;chosenScriptureFit=null;chosenVerseSlides=null;chosenSecondVerseSlides=null;addSecondLanguage=false;captured=null;$('fillSecondStatus').textContent='';const i=isEdit?current():null;$('dialogTitle').textContent=isEdit?'Edit service item':'Add to your service';$('titleInput').value=i?.title||'';$('typeInput').value=i?.type||'Song';$('textInput').value=i?.slides.join('\n\n')||'';$('itemPrimaryVersion').value=i?.primaryVersion||'';$('itemSecondaryVersion').value=i?.secondaryVersion||'';$('itemSecondaryText').value=i?.secondarySlides?.join('\n\n')||'';$('songSearch').value='';$('delete').hidden=!isEdit;updateItemTranslationFields();renderSongs();$('itemDialog').showModal()}
  $('add').onclick=()=>openEditor(false);$('edit').onclick=()=>openEditor(true);$('cancel').onclick=()=>$('itemDialog').close();
  function updateItemTranslationFields(){const type=$('typeInput').value;$('translationFields').hidden=type!=='Scripture';$('bibleTools').hidden=type!=='Scripture';$('songTools').hidden=type!=='Song';$('saveSongTemplate').hidden=type!=='Song';$('titleInput').required=type!=='Scripture';$('titleLabel').textContent=type==='Scripture'?'Title (optional)':'Title';if(type==='Scripture')return prepareBible()}
  $('typeInput').onchange=updateItemTranslationFields;
@@ -775,16 +877,110 @@ if(mode==='audience'||mode==='stage'){
   if(saveBrandingRecord({...readBranding(),baseRevision:remote.revision,baseBranding:brandingOf(remote.branding)})){$('brandingStatus').textContent='Keeping your branding and sharing it.';window.dispatchEvent(new Event('worship:branding'))}
  };
  renderBranding();
- function openOutput(view,screen='1'){if(window.worshipWorkspace?.role==='editor')return;if(!window.open('?view='+view+(view==='audience'?'&screen='+screen:''),'worshipui-'+view+(view==='audience'?'-'+screen:''),'popup,width=1100,height=700'))toast('Allow pop-up windows to open your '+view+' display.')}
+ // Opens an output window; in the desktop app, a window with an assigned display moves there in fullscreen.
+ function assignedDisplay(view,screen){const saved=readScreens();return view==='stage'?saved.stage?.display:saved.screens[Number(screen)-1].display}
+ async function openOutput(view,screen='1'){
+  if(window.worshipWorkspace?.role==='editor')return;
+  if(!window.open('?view='+view+(view==='audience'?'&screen='+screen:''),'worshipui-'+view+(view==='audience'?'-'+screen:''),'popup,width=1100,height=700')){toast('Allow pop-up windows to open your '+view+' display.');return}
+  const display=assignedDisplay(view,screen);
+  if(display===undefined||!window.worshipDesktop?.placeOutput)return;
+  // The window registers with the desktop app just after it opens, so retry briefly.
+  for(let attempt=0;attempt<10;attempt++){
+   try{await window.worshipDesktop.placeOutput(view,screen,display);return}
+   catch(error){if(!/Open the window first/.test(error.message)){toast(error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/,''));return}await new Promise(resolve=>setTimeout(resolve,200))}
+  }
+ }
+ function saveScreens(change){
+  const next=change(readScreens());
+  try{workspaceStorage.setItem(SCREENS,JSON.stringify(next));renderOutput();return true}catch{toast('Could not save the screen setting on this device.');return false}
+ }
  $('audience').onclick=()=>openOutput('audience','1');$('openScreen1').onclick=()=>openOutput('audience','1');$('openScreen2').onclick=()=>openOutput('audience','2');
  ;['screen1Show','screen2Show'].forEach((id,n)=>{
   $(id).value=readScreens().screens[n].show;
-  $(id).onchange=()=>{const next=readScreens();next.screens[n]={show:$(id).value};try{workspaceStorage.setItem(SCREENS,JSON.stringify(next));renderOutput()}catch{toast('Could not save the screen setting on this device.')}};
+  $(id).onchange=()=>saveScreens(next=>{next.screens[n]={...next.screens[n],show:$(id).value};return next});
  });$('stage').onclick=()=>openOutput('stage');
+ // Screen setup dialog (header "Screens"): display per output, what each audience screen shows, identify and open.
+ // Outputs that can be placed on a display, and how each is stored in the screen settings.
+ const OUTPUTS=[{id:'audience1',name:'Audience 1',get:s=>s.screens[0].display,set:(s,d)=>{const e={show:s.screens[0].show};if(d!==undefined)e.display=d;s.screens[0]=e}},
+  {id:'audience2',name:'Audience 2',get:s=>s.screens[1].display,set:(s,d)=>{const e={show:s.screens[1].show};if(d!==undefined)e.display=d;s.screens[1]=e}},
+  {id:'stage',name:'Stage',get:s=>s.stage?.display,set:(s,d)=>{if(d!==undefined)s.stage={display:d};else delete s.stage}}];
+ // Give one output a display (or none); a display holds one output, so whatever was on it is unassigned.
+ function assignDisplay(outputId,display){
+  saveScreens(next=>{
+   if(display!==undefined)OUTPUTS.forEach(output=>{if(output.id!==outputId&&output.get(next)===display)output.set(next,undefined)});
+   OUTPUTS.find(output=>output.id===outputId).set(next,display);return next;
+  });
+  renderScreenSetup();
+ }
+ let knownDisplays=[];
+ // A to-scale map of the displays as Windows arranges them; each card chooses which output it shows.
+ function renderDisplayMap(displays,saved){
+  const map=$('displayMap');map.replaceChildren();
+  if(!displays.length){const empty=document.createElement('p');empty.className='subtle';empty.textContent=window.worshipDesktop?'No displays detected.':'Display detection is available in the installed app.';map.append(empty);map.style.height='';return}
+  const left=Math.min(...displays.map(d=>d.bounds.x)),top=Math.min(...displays.map(d=>d.bounds.y));
+  const right=Math.max(...displays.map(d=>d.bounds.x+d.bounds.width)),bottom=Math.max(...displays.map(d=>d.bounds.y+d.bounds.height));
+  const width=map.clientWidth||640,scale=Math.min((width-8)/(right-left),190/(bottom-top));
+  map.style.height=Math.round((bottom-top)*scale+8)+'px';
+  displays.forEach(display=>{
+   const card=document.createElement('div');card.className='display-card'+(display.primary?' primary':'');
+   Object.assign(card.style,{left:Math.round((display.bounds.x-left)*scale+4)+'px',top:Math.round((display.bounds.y-top)*scale+4)+'px',width:Math.round(display.bounds.width*scale-6)+'px',height:Math.round(display.bounds.height*scale-6)+'px'});
+   const number=document.createElement('strong');number.textContent=String(display.number);
+   const size=document.createElement('small');size.textContent=display.width+'×'+display.height+(display.primary?' · main':'');
+   const use=document.createElement('select');use.setAttribute('aria-label','Display '+display.number+' shows');
+   const assigned=OUTPUTS.find(output=>output.get(saved)===display.id);
+   [{id:'',name:'Not used'},...OUTPUTS.map(o=>({id:o.id,name:o.name}))].forEach(choice=>{const option=document.createElement('option');option.value=choice.id;option.textContent=choice.name;use.append(option)});
+   use.value=assigned?.id||'';
+   use.onchange=()=>{if(use.value)assignDisplay(use.value,display.id);else if(assigned)assignDisplay(assigned.id,undefined)};
+   card.append(number,size,use);map.append(card);
+  });
+ }
+ async function renderScreenSetup(displays){
+  const saved=readScreens(),desktop=!!window.worshipDesktop?.displays;
+  if(!displays){displays=[];if(desktop)try{displays=await window.worshipDesktop.displays()}catch{}}
+  knownDisplays=displays;
+  const connected=new Set(displays.map(d=>d.id));
+  const options=[{id:'',name:desktop?'Not assigned':'Drag the window to the projector'},...displays.map(d=>({id:String(d.id),name:'Display '+d.number+' · '+d.width+'×'+d.height+(d.primary?' (main)':'')}))];
+  OUTPUTS.forEach(output=>{
+   const id=output.id==='stage'?'stageDisplay':output.id+'Display',display=output.get(saved);
+   // Keep an assignment to a display that is unplugged right now, so it returns when reconnected.
+   const choices=display!==undefined&&!connected.has(display)?[...options,{id:String(display),name:'Disconnected display'}]:options;
+   fillBibleOptions(id,choices,display===undefined?'':String(display));$(id).disabled=!desktop;
+  });
+  $('audience1Show').value=saved.screens[0].show;$('audience2Show').value=saved.screens[1].show;
+  $('identifyDisplays').hidden=!desktop;$('detectDisplays').hidden=!desktop;
+  renderDisplayMap(displays,saved);
+  $('screensStatus').textContent=desktop?(displays.length>1?displays.length+' displays connected.':'Only one display is connected. Connect the projector, then reopen Screen setup.'):'Display placement is available in the installed app. In a browser, drag each window to the projector and choose fullscreen.';
+ }
+ $('detectDisplays').onclick=()=>renderScreenSetup();
+ // Plugging in or removing a projector refreshes the map and says what changed.
+ window.worshipDesktop?.onDisplaysChanged?.(displays=>{
+  const before=new Set(knownDisplays.map(d=>d.id)),added=displays.filter(d=>!before.has(d.id));
+  if(added.length)toast('Display connected: Display '+added[0].number+' · '+added[0].width+'×'+added[0].height+'. Open Screens to assign it.');
+  else if(displays.length<knownDisplays.length)toast('A display was disconnected.');
+  knownDisplays=displays;
+  if($('screensDialog').open)renderScreenSetup(displays);
+ });
+ window.worshipDesktop?.displays?.().then(displays=>{knownDisplays=displays}).catch(()=>{});
+ $('screenSetup').onclick=()=>{$('screensDialog').showModal();renderScreenSetup()};
+ $('closeScreens').onclick=()=>$('screensDialog').close();
+ [['audience1Display','audience1'],['audience2Display','audience2'],['stageDisplay','stage']].forEach(([id,output])=>{$(id).onchange=()=>assignDisplay(output,$(id).value?Number($(id).value):undefined)});
+ [['audience1Show',0,'screen1Show'],['audience2Show',1,'screen2Show']].forEach(([id,n,panel])=>{$(id).onchange=()=>{if(saveScreens(next=>{next.screens[n]={...next.screens[n],show:$(id).value};return next}))$(panel).value=$(id).value}});
+ $('openAudience1').onclick=()=>openOutput('audience','1');$('openAudience2').onclick=()=>openOutput('audience','2');$('openStageScreen').onclick=()=>openOutput('stage');
+ $('identifyDisplays').onclick=()=>window.worshipDesktop?.identifyDisplays().catch(()=>{});
+ $('openAllScreens').onclick=async()=>{
+  const saved=readScreens(),targets=[];
+  if(saved.screens[0].display!==undefined)targets.push(['audience','1']);
+  if(saved.screens[1].display!==undefined)targets.push(['audience','2']);
+  if(saved.stage?.display!==undefined)targets.push(['stage','1']);
+  if(!targets.length){$('screensStatus').textContent='Assign a display to at least one output first.';return}
+  for(const [view,screen] of targets)await openOutput(view,screen);
+  $('screensStatus').textContent=targets.length+' screen'+(targets.length===1?'':'s')+' opened.';
+ };
  document.addEventListener('keydown',e=>{if($('itemDialog').open||$('songSectionDialog').open||document.querySelector('dialog[open]')||e.ctrlKey||e.metaKey||e.altKey)return;if(['INPUT','TEXTAREA','SELECT','BUTTON'].includes(e.target.tagName)&&!(e.target===$('take')&&e.key===' '))return;if(['ArrowRight','ArrowDown','ArrowLeft','ArrowUp',' ','b','B'].includes(e.key))e.preventDefault();if(['ArrowRight','ArrowDown'].includes(e.key))move(1);if(['ArrowLeft','ArrowUp'].includes(e.key))move(-1);if(e.key===' '&&!e.repeat)advanceLive();if(e.key.toLowerCase()==='b'){$('blackout').click()}});
  window.worshipWorkspace={
    role:'operator',
    getService:()=>structuredClone(service),valid,
+   saveFailed:()=>saveFailed,
    getDate:()=>library?.active==='undated'?'':library?.active||'',
    getDateEntry:date=>library?.entries[date||'undated']?structuredClone(library.entries[date||'undated']):null,
    getDateEntries:()=>library?structuredClone(library.entries):{},
@@ -803,6 +999,19 @@ if(mode==='audience'||mode==='stage'){
      next.active=key;
      try{saveLibrary(next)}catch{toast('Could not save the selected setlist. Export a backup and check storage.');return false}
      service=structuredClone(next.entries[key].service);selected=service.items[0]?.id;index=0;render();return true;
+   },
+   // Removes a saved dated setlist from this computer (not the one that is open). Its service goes into the
+   // recovery copies first, so "Download recovery" can bring it back.
+   deleteDate(date){
+     if(!library||!validDate(date)||library.active===date||!library.entries[date])return false;
+     try{
+       const recovery=JSON.parse(workspaceStorage.getItem('worshipui.recovery.v1')||'[]');
+       recovery.push({at:new Date().toISOString(),date,service:structuredClone(library.entries[date].service)});
+       workspaceStorage.setItem('worshipui.recovery.v1',JSON.stringify(recovery.slice(-5)));
+     }catch{toast('Could not save a recovery copy, so the setlist was not deleted.');return false}
+     const next=structuredClone(library);delete next.entries[date];
+     try{saveLibrary(next)}catch{toast('Could not delete the setlist. Check device storage.');return false}
+     return true;
    },
    addItems(items){
      if(!Array.isArray(items)||!items.length||service.items.length+items.length>200){toast('The service can contain at most 200 items.');return false}

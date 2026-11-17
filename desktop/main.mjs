@@ -1,4 +1,4 @@
-import {app,BrowserWindow,ipcMain,dialog,shell} from 'electron';
+import {app,BrowserWindow,ipcMain,dialog,shell,screen,clipboard} from 'electron';
 import {readFileSync,writeFileSync,existsSync,renameSync,mkdirSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import path from 'node:path';
@@ -44,6 +44,43 @@ else {
    if(typeof url!=='string'||!/^https:\/\/www\.bible\.com\/bible\/[0-9]{1,5}\/[1-3A-Z]{3}\.[0-9]{1,3}\.[0-9]{1,3}(?:-[0-9]{1,3})?\.[A-Z0-9]{2,10}$/.test(url))throw Error('Unsupported YouVersion link');
    await shell.openExternal(url);
   });
+  // bible.com inside WorshipUI: a separate window (own browsing session, no preload, bible.com only) where the
+  // operator finds a passage; "Use these verses" reads the verses shown on that page.
+  let bibleWindow=null;
+  const bibleUrl=/^https:\/\/www\.bible\.com\/(?:[a-z]{2}(?:-[A-Z]{2})?\/)?bible\/[0-9]{1,5}\/[1-3A-Z]{3}\.[0-9]{1,3}(?:\.[0-9]{1,3}(?:-[0-9]{1,3})?)?\.[A-Za-z0-9-]{2,12}$/i;
+  ipcMain.handle('wui:open-bible',async(event,url)=>{
+   if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');
+   if(typeof url!=='string'||!bibleUrl.test(url))throw Error('Unsupported YouVersion link');
+   if(!bibleWindow||bibleWindow.isDestroyed()){
+    bibleWindow=new BrowserWindow({title:'bible.com — WorshipUI',width:1000,height:800,autoHideMenuBar:true,webPreferences:{partition:'persist:bible',sandbox:true,contextIsolation:true,nodeIntegration:false}});
+    bibleWindow.webContents.setWindowOpenHandler(()=>({action:'deny'}));
+    bibleWindow.webContents.on('will-navigate',(navigation,target)=>{if(!/^https:\/\/www\.bible\.com\//.test(target))navigation.preventDefault()});
+    bibleWindow.on('closed',()=>{bibleWindow=null});
+   }
+   await bibleWindow.loadURL(url);bibleWindow.show();bibleWindow.focus();
+  });
+  ipcMain.handle('wui:capture-bible',async event=>{
+   if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');
+   if(!bibleWindow||bibleWindow.isDestroyed())throw Error('Open the passage in bible.com first.');
+   const url=bibleWindow.webContents.getURL();
+   // Each verse is an element with data-usfm="JHN.3.16"; its text is in "*_content" parts, footnotes in "*_note".
+   const verses=await bibleWindow.webContents.executeJavaScript(`(()=>{const out={};for(const verse of document.querySelectorAll('[data-usfm]')){const id=verse.getAttribute('data-usfm');if(!/^[1-3A-Z]{3}\\.\\d+\\.\\d+$/.test(id))continue;let text='';for(const part of verse.querySelectorAll('[class$="_content"]')){if(!part.closest('[class$="_note"]'))text+=part.textContent}out[id]=((out[id]||'')+' '+text).replace(/\\s+/g,' ').trim()}return out})()`);
+   const clean={};for(const [id,text] of Object.entries(verses||{}))if(typeof text==='string'&&text&&Object.keys(clean).length<500)clean[id]=text.slice(0,5000);
+   // The verses are in WorshipUI now, so close bible.com and return to the workspace.
+   if(Object.keys(clean).length){bibleWindow.close();main.focus()}
+   return {url,verses:clean};
+  });
+  ipcMain.handle('wui:close-bible',event=>{
+   if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');
+   if(bibleWindow&&!bibleWindow.isDestroyed())bibleWindow.close();
+  });
+  // Clipboard text for the YouVersion step (the page asks only while that step is active).
+  ipcMain.handle('wui:read-clipboard',async event=>{
+   if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');
+   // readText may return a promise in newer Electron versions, so await it and coerce to text.
+   const text=await clipboard.readText();
+   return String(text??'').slice(0,100000);
+  });
   ipcMain.handle('wui:open-song-folder',async event=>{
    if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');
    const error=await shell.openPath(songDirectory());if(error)throw Error('Could not open the song folder: '+error);
@@ -63,6 +100,30 @@ else {
    store.setItem('worshipui.sync.v1',JSON.stringify({baseRevision:0,baseService:null,live:false,role:'operator'}));
    return {origin};
   });
+  // Output screen setup: list displays, move an Audience/Stage window onto a display in fullscreen, and identify displays.
+  const outputs=new Map();
+  const displayList=()=>{const primary=screen.getPrimaryDisplay().id;return screen.getAllDisplays().map((display,index)=>({id:display.id,number:index+1,width:Math.round(display.size.width*display.scaleFactor),height:Math.round(display.size.height*display.scaleFactor),primary:display.id===primary,label:display.label||'',bounds:display.bounds}))};
+  // Tell the workspace when a projector or monitor is connected, removed or rearranged.
+  const displaysChanged=()=>{if(main&&!main.isDestroyed())main.webContents.send('wui:displays-changed',displayList())};
+  screen.on('display-added',displaysChanged);screen.on('display-removed',displaysChanged);screen.on('display-metrics-changed',displaysChanged);
+  ipcMain.handle('wui:displays',event=>{if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');return displayList()});
+  ipcMain.handle('wui:place-output',(event,view,screenNumber,displayId)=>{
+   if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');
+   const display=screen.getAllDisplays().find(d=>d.id===displayId);if(!display)throw Error('That display is not connected.');
+   const target=[...outputs].find(([window,output])=>!window.isDestroyed()&&output.view===view&&(view!=='audience'||output.screen===screenNumber));
+   if(!target)throw Error('Open the window first.');
+   const window=target[0];window.setFullScreen(false);window.setBounds(display.bounds);window.setFullScreen(true);
+  });
+  ipcMain.handle('wui:identify-displays',event=>{
+   if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');
+   displayList().forEach(info=>{
+    const bounds=screen.getAllDisplays().find(d=>d.id===info.id).bounds,width=420,height=260;
+    const badge=new BrowserWindow({x:Math.round(bounds.x+(bounds.width-width)/2),y:Math.round(bounds.y+(bounds.height-height)/2),width,height,frame:false,alwaysOnTop:true,skipTaskbar:true,focusable:false,resizable:false,backgroundColor:'#101217',webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false}});
+    const html='<body style="margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#101217;color:#fff;font-family:Segoe UI,sans-serif"><div style="font-size:150px;font-weight:700;line-height:1">'+info.number+'</div><div style="font-size:20px;color:#a5b5ce">'+info.width+' × '+info.height+(info.primary?' · main':'')+'</div></body>';
+    badge.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent(html));
+    setTimeout(()=>{if(!badge.isDestroyed())badge.destroy()},3000);
+   });
+  });
   function protect(window){
    windows.add(window);window.on('closed',()=>windows.delete(window));
    window.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith(host.origin+'/'))event.preventDefault()});
@@ -77,7 +138,11 @@ else {
    if(target.origin!==host.origin||target.pathname!=='/'||!['audience','stage'].includes(target.searchParams.get('view')))return {action:'deny'};
    return {action:'allow',overrideBrowserWindowOptions:{width:1100,height:720,autoHideMenuBar:true,backgroundColor:'#000000',webPreferences:preferences}};
   });
-  main.webContents.on('did-create-window',window=>{protect(window);window.webContents.setWindowOpenHandler(()=>({action:'deny'}))});
+  main.webContents.on('did-create-window',(window,details)=>{
+   protect(window);window.webContents.setWindowOpenHandler(()=>({action:'deny'}));
+   const url=new URL(details.url);outputs.set(window,{view:url.searchParams.get('view'),screen:url.searchParams.get('screen')||'1'});
+   window.on('closed',()=>outputs.delete(window));
+  });
   main.on('close',event=>{
    const live=JSON.parse(store.getItem('worshipui.sync.v1')||'{}').live;
    if(live&&!closing){const choice=dialog.showMessageBoxSync(main,{type:'question',buttons:['Keep presenting','Close app and displays'],defaultId:0,cancelId:0,message:'Live mode is active. Close WorshipUI and its audience screens?'});if(choice===0){event.preventDefault();return}}

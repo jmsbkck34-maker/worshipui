@@ -16,8 +16,7 @@
  <div class="header-actions">
   <span id="saveState" role="status">Saved on this device</span>
   <button id="settings" type="button">Settings</button>
-  <button id="export">Export</button>
-  <label class="button">Import<input id="import" type="file" accept="application/json" hidden></label>
+  <button id="screenSetup" type="button">Screens</button>
   <button id="audience">↗ Audience</button>
   <button id="stage">↗ Stage</button>
  </div>
@@ -30,14 +29,17 @@
    <div><button id="openDate" type="button">Open date</button><button id="copyDate" type="button">Copy to date</button></div>
    <button id="openUndated" type="button">Undated service</button>
    <p id="dateStatus" role="status">Undated service</p>
+   <div id="savedSetlists" class="saved-setlists" aria-label="Saved setlists"></div>
   </div>
   <div class="eyebrow">YOUR SERVICE</div>
   <input id="serviceTitle" aria-label="Service title" maxlength="100">
   <div class="subtle">A little preparation. A peaceful Sunday.</div>
   <div class="section-label">ORDER OF SERVICE <span id="itemCount"></span></div>
-  <nav id="order" aria-label="Service order"></nav>
   <button class="add" id="add">＋ Add service item</button>
-  <div class="aside-bottom"><span class="status-dot"></span> Local workspace · works offline<br><small>Keep a backup with Export.</small></div>
+  <nav id="order" aria-label="Service order"></nav>
+  <div class="aside-bottom"><span class="status-dot"></span> Local workspace · works offline<br><small>Save a backup file of this service, or restore one.</small>
+   <div class="backup-actions"><button id="export" type="button" title="Save this service as a backup file">Back up</button><label class="button" title="Replace this service with a backup file">Restore backup<input id="import" type="file" accept="application/json" hidden></label></div>
+  </div>
  </aside>
  <section class="editor">
   <div class="editor-top"><div><div class="eyebrow">PREPARE & PRESENT</div><h1 id="selectedTitle"></h1></div><button id="edit">Edit item</button></div>
@@ -68,6 +70,20 @@
   <div class="readiness"><strong>Before you begin</strong><p id="ready"></p><p>Open Audience, move that window to your projector, then enter fullscreen. Open Stage for current and next text.</p></div>
  </section>
 </main>
+<dialog id="screensDialog" aria-labelledby="screensTitle">
+ <div class="settings-top"><div><div class="eyebrow">OUTPUT SCREENS</div><h2 id="screensTitle">Screen setup</h2></div><button id="closeScreens" type="button">Done</button></div>
+ <p class="subtle">Choose the display for each output. Open places the window on that display in fullscreen.</p>
+ <div class="display-map-head"><strong>Connected displays</strong><button id="detectDisplays" type="button">Detect displays</button></div>
+ <div id="displayMap" class="display-map" aria-label="Connected displays"></div>
+ <div class="screens-grid">
+  <span></span><strong>Display</strong><strong>Shows</strong><span></span>
+  <span>Audience 1</span><select id="audience1Display" aria-label="Audience 1 display"></select><select id="audience1Show" aria-label="Audience 1 shows"><option value="both">Both languages</option><option value="first">First language</option><option value="second">Second language</option></select><button id="openAudience1" type="button">Open</button>
+  <span>Audience 2</span><select id="audience2Display" aria-label="Audience 2 display"></select><select id="audience2Show" aria-label="Audience 2 shows"><option value="both">Both languages</option><option value="first">First language</option><option value="second">Second language</option></select><button id="openAudience2" type="button">Open</button>
+  <span>Stage</span><select id="stageDisplay" aria-label="Stage display"></select><span class="subtle">Current and next slide</span><button id="openStageScreen" type="button">Open</button>
+ </div>
+ <div class="dialog-actions"><button id="identifyDisplays" type="button">Identify displays</button><button id="openAllScreens" class="primary" type="button">Open all assigned screens</button></div>
+ <p id="screensStatus" class="subtle" role="status"></p>
+</dialog>
 <dialog id="templateDialog">
  <div class="eyebrow">SLIDE APPEARANCE</div>
  <h2>Edit slide template</h2>
@@ -238,9 +254,15 @@
    <label>Slide layout<select id="bibleLayout"><option value="verses">One verse per slide</option><option value="combined">All verses on one slide · auto-fit text</option></select></label>
    <div id="youVersionTools" class="youversion-tools" hidden>
     <label>YouVersion translation<select id="youVersionId"></select></label>
-    <button id="openYouVersion" type="button">Open passage in YouVersion</button>
-    <label>Paste the verses copied from YouVersion<textarea id="youVersionText" rows="5" placeholder="On bible.com, select the verses (include the verse numbers for one slide per verse), copy, then paste here."></textarea></label>
-    <p class="subtle">Verse numbers in the pasted text give one slide per verse; without them the passage becomes one auto-fit slide. Check the translation’s copyright terms for projection and streaming.</p>
+    <ol class="youversion-steps">
+     <li><button id="openYouVersion" type="button">Open passage in YouVersion</button></li>
+     <li id="youVersionStepFind">In the bible.com window, go to the chapter and translation you want.</li>
+     <li id="youVersionStepUse"><button id="captureYouVersion" class="primary" type="button">Use these verses</button> <span class="subtle">brings in the verses chosen above from the bible.com window.</span></li>
+     <li id="youVersionStepPaste">Or copy verses on bible.com and come back — they are picked up automatically. <button id="pasteYouVersion" type="button">Paste from clipboard</button></li>
+    </ol>
+    <label>Copied verses<textarea id="youVersionText" rows="4" placeholder="The verses you copy on bible.com appear here. You can also paste them yourself."></textarea></label>
+    <div id="youVersionPreview" class="youversion-preview" hidden></div>
+    <p class="subtle">Verse numbers in the copied text give one slide per verse; without them the passage becomes one auto-fit slide. Check the translation’s copyright terms for projection and streaming.</p>
    </div>
    <button id="bibleSecond" type="button" aria-pressed="false" hidden>+ Add second language</button>
    <button id="addBiblePassage" type="button" disabled>Add selected passage</button>
@@ -261,6 +283,7 @@
  </form>
 </dialog>
 <div id="toast" role="status"></div>
+<script src="i18n.js"></script>
 <script src="slide-template.cjs"></script>
 <script src="content-import.js"></script>
 <script src="bible-search.js"></script>

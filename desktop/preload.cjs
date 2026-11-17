@@ -4,7 +4,15 @@ contextBridge.exposeInMainWorld('worshipDesktop',{
  configure:origin=>ipcRenderer.invoke('wui:configure',origin),
  archiveSong:(name,text)=>ipcRenderer.invoke('wui:archive-song',name,text),
  openSongFolder:()=>ipcRenderer.invoke('wui:open-song-folder'),
- openYouVersion:url=>ipcRenderer.invoke('wui:open-youversion',url)
+ openYouVersion:url=>ipcRenderer.invoke('wui:open-youversion',url),
+ readClipboard:()=>ipcRenderer.invoke('wui:read-clipboard'),
+ openBible:url=>ipcRenderer.invoke('wui:open-bible',url),
+ captureBible:()=>ipcRenderer.invoke('wui:capture-bible'),
+ closeBible:()=>ipcRenderer.invoke('wui:close-bible'),
+ displays:()=>ipcRenderer.invoke('wui:displays'),
+ placeOutput:(view,screen,display)=>ipcRenderer.invoke('wui:place-output',view,screen,display),
+ identifyDisplays:()=>ipcRenderer.invoke('wui:identify-displays'),
+ onDisplaysChanged:callback=>ipcRenderer.on('wui:displays-changed',(_event,displays)=>callback(displays))
 });
 contextBridge.exposeInMainWorld('worshipStorage',{
  getItem:key=>{const result=ipcRenderer.sendSync('wui:read',key);if(result.error)throw Error(result.error);return result.value},

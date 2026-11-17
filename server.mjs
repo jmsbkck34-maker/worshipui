@@ -115,7 +115,7 @@ export function createApp(store, {origin='http://127.0.0.1:8090', secure=false}=
     ['/', ['index.html','text/html']], ['/index.html',['index.html','text/html']],
     ['/style.css',['style.css','text/css']], ['/app.js',['app.js','text/javascript']], ['/content-import.js',['content-import.js','text/javascript']],
     ['/bible-search.js',['bible-search.js','text/javascript']], ['/assets/bibles/kjv.vpl.txt',['assets/bibles/kjv.vpl.txt','text/plain']], ['/assets/bibles/web.vpl.txt',['assets/bibles/web.vpl.txt','text/plain']], ['/assets/bibles/rv1909.vpl.txt',['assets/bibles/rv1909.vpl.txt','text/plain']],
-    ['/sync.js',['sync.js','text/javascript']], ['/sync-core.js',['sync-core.js','text/javascript']],
+    ['/sync.js',['sync.js','text/javascript']], ['/i18n.js',['i18n.js','text/javascript']], ['/sync-core.js',['sync-core.js','text/javascript']],
     ['/sw.js',['sw.js','text/javascript']], ['/desktop-ui.js',['desktop-ui.js','text/javascript']], ['/slide-template.cjs',['slide-template.cjs','text/javascript']],['/assets/fonts/Inter.ttf',['assets/fonts/Inter.ttf','font/ttf']],['/assets/fonts/Montserrat.ttf',['assets/fonts/Montserrat.ttf','font/ttf']],['/assets/fonts/Lato.ttf',['assets/fonts/Lato.ttf','font/ttf']],['/assets/fonts/Merriweather.ttf',['assets/fonts/Merriweather.ttf','font/ttf']],['/assets/fonts/PlayfairDisplay.ttf',['assets/fonts/PlayfairDisplay.ttf','font/ttf']],['/assets/fonts/Oswald.ttf',['assets/fonts/Oswald.ttf','font/ttf']],['/assets/fonts/Poppins.ttf',['assets/fonts/Poppins.ttf','font/ttf']],['/assets/fonts/SourceSans3.ttf',['assets/fonts/SourceSans3.ttf','font/ttf']]
   ]);
   return http.createServer(async (req,res) => {
