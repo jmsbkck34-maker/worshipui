@@ -48,3 +48,11 @@ test('Spanish RV 1909 aligns verse for verse and labels references in Spanish',a
  const web=bible.parse(await readFile(new URL('../assets/bibles/web.vpl.txt',import.meta.url),'utf8'));
  assert.throws(()=>bible.parallel(web,bible.passage(kjv,'ACT',15,34,34).verses),/not in the second translation/);
 });
+
+test('paragraph marks in the source text never reach slides',async()=>{
+ const context={};vm.createContext(context);
+ vm.runInContext(await readFile(new URL('../bible-search.js',import.meta.url),'utf8'),context);
+ const verses=context.WorshipBible.parse(await readFile(new URL('../assets/bibles/kjv.vpl.txt',import.meta.url),'utf8'));
+ assert.equal(verses.filter(verse=>verse.text.includes('¶')||verse.text.includes('  ')).length,0);
+ assert.match(context.WorshipBible.passage(verses,'JOH',3,16,16).slides[0],/^For God so loved the world/);
+});

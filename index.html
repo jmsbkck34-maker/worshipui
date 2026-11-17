@@ -49,9 +49,10 @@
    <div id="themes" class="themes"></div>
   </div>
   <div id="slides" class="slides"></div>
+  <div class="slide-actions"><button id="slideMoveLeft" type="button">◀ Move</button><button id="slideMoveRight" type="button">Move ▶</button><button id="slideDuplicate" type="button">Duplicate slide</button><button id="slideDelete" type="button">Delete slide</button></div>
   <button id="songSection" type="button" hidden>Set selected slide section</button>
   <div class="slide-screen-row"><label>Selected slide shows on<select id="slideScreen"><option value="">All screens</option><option value="1">Screen 1 only</option><option value="2">Screen 2 only</option></select></label><button id="slideScreenAll" type="button">Use for every slide in this item</button></div>
-  <div class="tip"><span>⌨</span><div><strong>Room to focus on worship.</strong><p>Arrow keys move the preview. Double-click a slide or press Space to take it live; Space then advances the live slide. B blacks out the screen.</p></div></div>
+  <div class="tip"><span>⌨</span><div><strong>Room to focus on worship.</strong><p>Arrow keys move the preview. Double-click a slide or press Space to take it live; Space then advances the live slide. B blacks out the screen. Drag slides to reorder them; Duplicate slide repeats the selected one (for example a chorus).</p></div></div>
  </section>
  <section class="monitor">
   <div class="section-label">PREVIEW <span>NOT ON SCREEN</span></div>
@@ -168,6 +169,27 @@
   <h3>Second language</h3>
   <label>Default second translation<select id="secondLanguage"></select></label>
   <p id="secondLanguageStatus" class="subtle" role="status">Used for the second translation when choosing Scripture.</p>
+ </section>
+ <section class="provider-section licensed-section">
+  <h3>Licensed Bible versions</h3>
+  <p class="subtle">Add translations your church is licensed to use. The text is kept only on this computer — not in services, sync, backups or GitHub — and appears in the Scripture version list.</p>
+  <div id="licensedList" class="licensed-list"></div>
+  <div class="licensed-form">
+   <label>Abbreviation<input id="licensedId" maxlength="12" placeholder="NIV"></label>
+   <label>Full name<input id="licensedName" maxlength="80" placeholder="New International Version"></label>
+   <label>Language<select id="licensedLanguage"><option value="en">English</option><option value="es">Spanish (Español)</option></select></label>
+   <label class="button">Choose Bible file<input id="licensedFile" type="file" accept=".txt" hidden></label>
+  </div>
+  <p id="licensedStatus" class="subtle" role="status">Bible text file: one verse per line (“GEN 1:1 …”) or a Bible SuperSearch plain-text export.</p>
+  <h4>Where to get licenses and Bible text</h4>
+  <ul class="license-links">
+   <li><a href="https://www.biblica.com/permissions/" target="_blank" rel="noopener noreferrer">NIV · Biblica permissions</a></li>
+   <li><a href="https://www.crossway.org/permissions/" target="_blank" rel="noopener noreferrer">ESV · Crossway permissions</a> · <a href="https://api.esv.org/" target="_blank" rel="noopener noreferrer">ESV API sign-up</a></li>
+   <li><a href="https://www.tyndale.com/permissions" target="_blank" rel="noopener noreferrer">NLT · Tyndale permissions</a></li>
+   <li><a href="https://www.harpercollinschristian.com/sales-and-rights/permissions/" target="_blank" rel="noopener noreferrer">NKJV, NIrV, CSB and others · HarperCollins Christian permissions</a></li>
+   <li><a href="https://www.lockman.org/permission-to-quote-copyright-trademark-information/" target="_blank" rel="noopener noreferrer">NASB, AMP · Lockman Foundation permissions</a></li>
+   <li><a href="https://api.bible/" target="_blank" rel="noopener noreferrer">API.Bible · licensed texts through an API (sign up)</a></li>
+  </ul>
  </section>
  <p class="subtle">SongSelect opens the CCLI service for lyrics. Bible text can be pasted or imported from a source you are authorized to use. WorshipUI does not sign in or fetch licensed text.</p>
  <div class="settings-grid">

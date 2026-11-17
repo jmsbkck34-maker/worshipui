@@ -9,11 +9,46 @@
   const verses=lines.map(line=>{
    const match=line.match(/^([A-Z0-9]+) ([0-9]+):([0-9]+) (.+)$/);
    if(!match||!bookNames.has(match[1]))throw Error('Bible data contains an invalid verse.');
-   return {book:match[1],chapter:Number(match[2]),verse:Number(match[3]),text:match[4]};
+   // Paragraph marks (¶) in some editions are print layout, not text to project.
+   return {book:match[1],chapter:Number(match[2]),verse:Number(match[3]),text:match[4].replace(/¶/g,' ').replace(/\s+/g,' ').trim()};
   });
   // Translations differ slightly (KJV 31,102 verses; WEB omits a few textual variants), so require a near-complete Bible.
   if(verses.length<31000||verses.length>31200||new Set(verses.map(v=>v.book)).size!==66||new Set(verses.map(v=>v.book+':'+v.chapter+':'+v.verse)).size!==verses.length)throw Error('The Bible data is incomplete or contains duplicate verses.');
   return verses;
+ }
+ // Convert a Bible SuperSearch plain-text export (book line, "Chapter N"/"Capítulo N", wrapped "N text" verses)
+ // into the verse-per-line format ("GEN 1:1 text"). Text already in that format is returned unchanged.
+ const CHAPTER=/^(?:Chapter|Psalm|Capítulo|Salmo) (\d+)$/;
+ function toVerseLines(source){
+  const text=String(source).replace(/^﻿/,'').replace(/\r\n?/g,'\n');
+  if(/^[1-3A-Z]{3} \d+:\d+ /.test(text.trimStart()))return text;
+  const verses=[];let book=null,bookIndex=-1,chapter=0,current=null,expected=0;
+  const lines=text.split('\n');
+  const nextText=n=>{for(let k=n+1;k<lines.length;k++)if(lines[k].trim())return lines[k].trim();return ''};
+  for(let n=0;n<lines.length;n++){
+   const line=lines[n].trim(),previousBlank=n===0||lines[n-1].trim()==='';
+   if(!line){current=null;continue}
+   // Book names are language-specific, so a book is the title line right before chapter 1; books follow canonical order.
+   const opening=nextText(n).match(CHAPTER);
+   if(previousBlank&&!CHAPTER.test(line)&&opening&&opening[1]==='1'){
+    bookIndex++;if(bookIndex>=names.length)throw Error('The file has more than 66 books.');
+    book=names[bookIndex][0];chapter=0;current=null;continue;
+   }
+   const heading=line.match(CHAPTER);
+   if(heading&&book){chapter=Number(heading[1]);expected=1;current=null;continue}
+   if(!book||!chapter)continue;
+   // A wrapped line can also start with a number, so only accept the next verse number (or a small skip after a blank line).
+   // Verses a translation omits appear as a bare number and are left out.
+   const verse=line.match(/^(\d+)(?: (.*))?$/),number=verse&&Number(verse[1]);
+   if(verse&&(number===expected||(previousBlank&&number>expected&&number<=expected+3))){
+    expected=number+1;
+    if(!verse[2]){current=null;continue}
+    current={book,chapter,verse:number,text:verse[2]};verses.push(current);continue;
+   }
+   if(!current)throw Error('Unexpected text in the Bible file near line '+(n+1)+'.');
+   current.text+=' '+line;
+  }
+  return verses.map(v=>v.book+' '+v.chapter+':'+v.verse+' '+v.text.replace(/\s+/g,' ').trim()).join('\n')+'\n';
  }
  // Bundled translations: id, label, language and data file. Only public-domain texts are bundled.
  const versions=[
@@ -116,5 +151,5 @@
   if(numbers.length===1)clean=clean.replace(new RegExp('^'+numbers[0]+'\\s+'),'');
   return {perVerse:numbers.length===1,slides:[clean.replace(/[ \t]+/g,' ').trim()]};
  }
- root.WorshipBible={usfmBook,parse,books,bookName,bookId,slideReferences,youVersionReference,chapters,verseNumbers,passage,parallel,versions,languages,youVersions,youVersionUrl,pastedPassage};
+ root.WorshipBible={usfmBook,toVerseLines,parse,books,bookName,bookId,slideReferences,youVersionReference,chapters,verseNumbers,passage,parallel,versions,languages,youVersions,youVersionUrl,pastedPassage};
 })(globalThis);

@@ -1,9 +1,11 @@
 # WorshipUI status — 2026-11-16
 
-Branch: `work/setlist-history-20261116` (version 0.3.3). Automated tests: 26 passing (`npm test`).
+Branch: `work/setlist-history-20261116` (version 0.3.3). Automated tests: 27 passing (`npm test`).
 
 ## Working in the demo
 
+- **Slide editing:** drag slides to reorder them, or use ◀ Move / Move ▶, Duplicate slide (for example to repeat a chorus) and Delete slide. Section labels, screen targets and second translations move with their slides, and the live slide stays correct.
+- **Licensed Bible versions (Settings):** import a text file for a version the church is licensed to use (for example NIV). It is stored only in the desktop app data folder, never in services, sync, backups or Git, and appears under Version when adding Scripture. Includes links to publisher permission pages and API sign-ups. Not tested in the installed app yet; tested with a stand-in in the automated tests.
 - **Songs:** SongSelect text import with section labels. A newly imported song appears in search and loads into the editor. Each slide can have a section label (Verse 1, Chorus, …).
 - **Scripture:**
   - Bundled KJV and Reina-Valera 1909, plus WEB as the English second translation.
@@ -34,8 +36,6 @@ Branch: `work/setlist-history-20261116` (version 0.3.3). Automated tests: 26 pas
 
 ## Requested, not built
 
-- **Settings → Licensed Bible versions:** add versions you hold licenses for (for example NIV, ESV, NLT) by importing their text, plus links for where to sign up for licences or APIs. Plan: store licensed texts only on the church computer (desktop app data folder, never in Git), and list them in the Bible picker.
-- **Song editing:** drag to reorder song slides; duplicate a slide (for example, repeat the chorus).
 - **Media:** PowerPoint import (with animations when PowerPoint is installed), timed slides, background music, countdown timer. Waiting on a decision: keep media on the computer it was added to until a shared server host is chosen?
 - **Machine translation** of non-Scripture text. Needs a provider choice (for example Azure Translator).
 - **Shared server:** deleting a setlist there (deletion is local only today), recent-setlist history, a shared song library.

@@ -14,7 +14,7 @@ export async function frontendTests(){
  const initial={title:'Sunday',items:[{id:'song',title:'Original',type:'Song',theme:'dusk',slides:['Original verse','Original chorus']}]};
  const key='worshipui.service.v1',liveKey='worshipui.live.v1',metaKey='worshipui.sync.v1';
  let checks=0;function check(a,b){assert.equal(JSON.stringify(a),JSON.stringify(b));checks++}
- async function client(role='operator',online=true,savedStorage=null){
+ async function client(role='operator',online=true,savedStorage=null,desktop=null){
    const nodes=new Map(),storage=savedStorage||new Map([[key,JSON.stringify(initial)],[metaKey,JSON.stringify({baseRevision:1,baseService:initial,live:false,role,username:role})]]),intervals=[],dated=new Map();
    function element(){return {value:'',open:false,style:{setProperty(key,value){this[key]=value}},children:[],textContent:'',append(...children){this.children.push(...children)},replaceChildren(){this.children=[]},setAttribute(){},showModal(){this.open=true},close(){this.open=false},click(){return this.onclick?.()},innerHTML:''}}
    const node=id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id)};
@@ -45,6 +45,7 @@ export async function frontendTests(){
        else throw Error('Unexpected API');
        return {ok:true,status:200,json:async()=>response};
      }};
+   if(desktop)context.worshipDesktop=desktop;
    context.window=context;vm.createContext(context);sources.forEach(source=>vm.runInContext(source,context));
    await new Promise(resolve=>setTimeout(resolve,0));
    return {nodes,node,storage,context,keydown:event=>documentListeners.get('keydown')(event),setRemote:v=>remote=v,getBrandingRemote:()=>clone(brandingRemote),setBrandingRemote:v=>brandingRemote=v,setDated:(date,v)=>dated.set(date,v),getDated:date=>dated.get(date),setOnline:v=>online=v,async poll(){await intervals[0]();await new Promise(resolve=>setTimeout(resolve,0))}};
@@ -340,6 +341,40 @@ export async function frontendTests(){
  check(flow.node('youVersionPreview').hidden,false);check(flow.node('youVersionPreview').children[0].textContent,'2 slides · Psalms 23:1-2 · ESV');
  await flow.node('addBiblePassage').onclick();
  check(flow.context.worshipWorkspace.getService().items.at(-1).slides,['The LORD is my shepherd; I shall not want.\nPsalms 23:1 · ESV','He makes me lie down in green pastures.\nPsalms 23:2 · ESV']);
+ // Song slides: duplicate the chorus, drag it into place, move and delete; labels and the live slide follow.
+ const song={title:'Sunday',items:[{id:'song',title:'Song',type:'Song',theme:'dusk',slides:['Verse one','Chorus','Verse two'],sectionLabels:['Verse 1','Chorus','Verse 2']}]};
+ const edit=await client('operator',false,new Map([[key,JSON.stringify(song)],[metaKey,JSON.stringify({baseRevision:1,baseService:song,live:false,role:'operator',username:'operator'})]]));
+ const slidesOf=()=>edit.context.worshipWorkspace.getService().items[0];
+ edit.node('slides').children[1].onclick();edit.node('take').onclick();
+ edit.node('slideDuplicate').onclick();
+ check(slidesOf().slides,['Verse one','Chorus','Chorus','Verse two']);check(slidesOf().sectionLabels,['Verse 1','Chorus','Chorus','Verse 2']);
+ const cards=()=>edit.node('slides').children,drop={preventDefault(){}};
+ cards()[2].ondragstart({dataTransfer:{setData(){}}});cards()[3].ondrop(drop);
+ check(slidesOf().slides,['Verse one','Chorus','Verse two','Chorus']);check(slidesOf().sectionLabels,['Verse 1','Chorus','Verse 2','Chorus']);
+ edit.node('slideMoveLeft').onclick();check(slidesOf().slides,['Verse one','Chorus','Chorus','Verse two']);
+ edit.node('slideDelete').onclick();check(slidesOf().slides,['Verse one','Chorus','Verse two']);check(slidesOf().sectionLabels,['Verse 1','Chorus','Verse 2']);
+ // The live chorus (slide 2) is still the live slide, so Space advances to Verse two.
+ edit.keydown({key:' ',target:{tagName:'DIV'},preventDefault(){}});check(JSON.parse(edit.storage.get(liveKey)).text,'Verse two');
+ // Licensed Bible versions (installed app): listed in Settings, offered under Version, and used for slides.
+ const shelf=[{id:'NIV',name:'New International Version',language:'en'}],saved=[];
+ const licensed=await client('operator',false,null,{listBibles:async()=>shelf.slice(),readBible:async id=>kjv.replace('JOH 3:16 ','JOH 3:16 Licensed: '),saveBible:async(version,text)=>{saved.push([version,text.length]);shelf.push(version);return version},deleteBible:async id=>{shelf.splice(shelf.findIndex(v=>v.id===id),1)}});
+ await settle();
+ check(licensed.node('licensedList').children[0].children[0].textContent,'NIV · New International Version · English');
+ licensed.node('add').onclick();licensed.node('typeInput').value='Scripture';await licensed.node('typeInput').onchange();await settle();
+ check(licensed.node('bibleVersion').children.map(option=>option.value),['KJV','NIV','YOUVERSION']);
+ licensed.node('bibleVersion').value='NIV';await licensed.node('bibleVersion').onchange();await settle();
+ licensed.node('bibleBook').value='JOH';licensed.node('bibleBook').onchange();licensed.node('bibleChapter').value='3';licensed.node('bibleChapter').onchange();
+ licensed.node('bibleFirst').value='16';licensed.node('bibleFirst').onchange();licensed.node('bibleLast').value='16';licensed.node('bibleLayout').value='verses';
+ await licensed.node('addBiblePassage').onclick();
+ const licensedItem=licensed.context.worshipWorkspace.getService().items.at(-1);
+check(licensedItem.primaryVersion,'NIV');check(licensedItem.slides[0].startsWith('Licensed: For God'),true);check(licensedItem.slides[0].endsWith('John 3:16 · NIV'),true);
+ // Adding needs an abbreviation and a name first; then the file is saved through the desktop bridge.
+ licensed.node('licensedId').value='';licensed.node('licensedName').value='';
+ await licensed.node('licensedFile').onchange({target:{files:[{text:async()=>'x'}],value:''}});
+ check(licensed.node('licensedStatus').textContent.startsWith('Enter the abbreviation'),true);check(saved.length,0);
+ licensed.node('licensedId').value='esv';licensed.node('licensedName').value='English Standard Version';licensed.node('licensedLanguage').value='en';
+ await licensed.node('licensedFile').onchange({target:{files:[{text:async()=>'GEN 1:1 In the beginning'}],value:''}});
+ check(saved[0][0],{id:'ESV',name:'English Standard Version',language:'en'});check(licensed.node('licensedList').children.length,2);
  const remoteEditor=await client('editor',false);remoteEditor.node('slides').children[1].onclick();remoteEditor.node('slides').children[1].onclick();check(remoteEditor.storage.has(liveKey),false);
  return checks;
 }

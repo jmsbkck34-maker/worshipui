@@ -1,5 +1,5 @@
 import {app,BrowserWindow,ipcMain,dialog,shell,screen,clipboard,Menu} from 'electron';
-import {readFileSync,writeFileSync,existsSync,renameSync,mkdirSync} from 'node:fs';
+import {readFileSync,writeFileSync,existsSync,renameSync,mkdirSync,rmSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -26,7 +26,7 @@ else {
   ipcMain.on('wui:read',(event,key)=>{try{if(!trusted(event))throw Error('Untrusted window');event.returnValue={value:store.getItem(key)}}catch{event.returnValue={error:'Unable to read local workspace'}}});
   ipcMain.on('wui:write',(event,key,value)=>{
    try{if(!trusted(event)||event.sender!==main.webContents)throw Error('Read-only display');store.setItem(key,value);event.returnValue={ok:true};for(const window of windows)if(!window.isDestroyed()&&window.webContents!==event.sender)window.webContents.send('wui:storage',{key,value})}
-   catch{event.returnValue={error:'Unable to save local workspace. Export a backup.'}}
+   catch{event.returnValue={error:'Unable to save local workspace. Use Back up.'}}
   });
   ipcMain.on('wui:connection',(event)=>{event.returnValue=trusted(event)?{origin:settings.origin}:{} });
   const songDirectory=()=>{const directory=path.join(app.getPath('userData'),'songs');mkdirSync(directory,{recursive:true});return directory};
@@ -67,6 +67,37 @@ else {
     }
     throw Error('No verses were found for that passage on YouVersion. Check the translation and try again.');
    }finally{if(!hidden.isDestroyed())hidden.destroy()}
+  });
+  // Licensed Bible versions the church adds in Settings: stored only on this computer (app data "bibles" folder),
+  // never in services, sync or exports. bibles.json lists them; each text is a verse-per-line file.
+  await import('../bible-search.js');
+  const bibleDirectory=()=>{const directory=path.join(app.getPath('userData'),'bibles');mkdirSync(directory,{recursive:true});return directory};
+  const bibleIndexFile=()=>path.join(bibleDirectory(),'bibles.json');
+  const readBibleIndex=()=>{try{const list=JSON.parse(readFileSync(bibleIndexFile(),'utf8'));return Array.isArray(list)?list:[]}catch{return []}};
+  const writeBibleIndex=list=>{writeFileSync(bibleIndexFile()+'.tmp',JSON.stringify(list),{mode:0o600});renameSync(bibleIndexFile()+'.tmp',bibleIndexFile())};
+  const validBibleId=id=>typeof id==='string'&&/^[A-Z0-9]{2,12}$/.test(id)&&!globalThis.WorshipBible.versions.some(v=>v.id===id);
+  const mainOnly=event=>{if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window')};
+  ipcMain.handle('wui:list-bibles',event=>{mainOnly(event);return readBibleIndex()});
+  ipcMain.handle('wui:read-bible',(event,id)=>{
+   mainOnly(event);if(!readBibleIndex().some(v=>v.id===id))throw Error('That Bible version is not on this computer.');
+   return readFileSync(path.join(bibleDirectory(),id+'.vpl.txt'),'utf8');
+  });
+  ipcMain.handle('wui:save-bible',(event,version,source)=>{
+   mainOnly(event);
+   if(!version||!validBibleId(version.id))throw Error('Use 2–12 capital letters or numbers for the abbreviation, different from KJV, WEB and RVR1909.');
+   if(typeof version.name!=='string'||!version.name.trim()||version.name.length>80)throw Error('Enter the version name (up to 80 characters).');
+   if(!/^[a-z]{2}$/.test(version.language))throw Error('Choose the version language.');
+   if(typeof source!=='string'||source.length>20_000_000)throw Error('Choose a Bible text file under 20 MB.');
+   const lines=globalThis.WorshipBible.toVerseLines(source);globalThis.WorshipBible.parse(lines);
+   writeFileSync(path.join(bibleDirectory(),version.id+'.vpl.txt'),lines,{encoding:'utf8',mode:0o600});
+   const entry={id:version.id,name:version.name.trim(),language:version.language};
+   writeBibleIndex([...readBibleIndex().filter(v=>v.id!==entry.id),entry]);
+   return entry;
+  });
+  ipcMain.handle('wui:delete-bible',(event,id)=>{
+   mainOnly(event);if(!validBibleId(id))throw Error('Unknown Bible version.');
+   writeBibleIndex(readBibleIndex().filter(v=>v.id!==id));
+   rmSync(path.join(bibleDirectory(),id+'.vpl.txt'),{force:true});
   });
   // Clipboard text for the YouVersion step (the page asks only while that step is active).
   ipcMain.handle('wui:read-clipboard',async event=>{
@@ -130,7 +161,9 @@ else {
   main.setMenuBarVisibility(false);protect(main);
   main.webContents.setWindowOpenHandler(({url})=>{
    const target=new URL(url);
-   if(target.href==='https://songselect.ccli.com/'){shell.openExternal(target.href).catch(error=>dialog.showErrorBox('Unable to open SongSelect',error.message));return {action:'deny'}}
+   // Links in Settings to SongSelect and Bible licensing/provider sites open in the system browser; nothing else does.
+   const externalHosts=['songselect.ccli.com','docs.api.bible','api.bible','api.esv.org','ebible.org','www.biblica.com','www.crossway.org','www.tyndale.com','www.harpercollinschristian.com','www.lockman.org'];
+   if(target.protocol==='https:'&&externalHosts.includes(target.hostname)){shell.openExternal(target.href).catch(error=>dialog.showErrorBox('Unable to open the link',error.message));return {action:'deny'}}
    if(target.origin!==host.origin||target.pathname!=='/'||!['audience','stage'].includes(target.searchParams.get('view')))return {action:'deny'};
    return {action:'allow',overrideBrowserWindowOptions:{width:1100,height:720,autoHideMenuBar:true,backgroundColor:'#000000',webPreferences:preferences}};
   });

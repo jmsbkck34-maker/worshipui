@@ -116,7 +116,7 @@ function paint(el,text,theme,black=false,template,options={}){
 function toast(t){$('toast').textContent=t;$('toast').style.display='block';clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('toast').style.display='none',3500)}
 // saveFailed stays true until a later save succeeds, so switching setlists can warn about unsaved work.
 let saveFailed=false;
-function persist(){try{storeService(service);saveFailed=false;$('saveState').textContent='Saved on this device';window.dispatchEvent(new Event('worship:changed'));return true}catch{saveFailed=true;$('saveState').textContent='Not saved — export a backup';toast('Storage unavailable. Export your service to keep a copy.');return false}}
+function persist(){try{storeService(service);saveFailed=false;$('saveState').textContent='Saved on this device';window.dispatchEvent(new Event('worship:changed'));return true}catch{saveFailed=true;$('saveState').textContent='Not saved — use Back up';toast('Storage unavailable. Use Back up to keep a copy.');return false}}
 function current(){return service.items.find(i=>i.id===selected)}
 // Audience screens: each screen shows both languages, the first only, or the second only.
 const SCREENS='worshipui.screens.v1',SCREEN_SHOWS=['both','first','second'];
@@ -173,6 +173,48 @@ if(mode==='audience'||mode==='stage'){
    if(label){const caption=card.children[1];caption.textContent+=' · '+label;card.setAttribute('aria-label','Preview slide '+(n+1)+', '+label)}
    card.oncontextmenu=event=>{event.preventDefault();openSongSection(n)};
   });
+  // Drag a slide card onto another to move it there.
+  if(item)Array.from($('slides').children).forEach((card,n)=>{
+   card.draggable=true;
+   card.ondragstart=event=>{dragFrom=n;event.dataTransfer?.setData('text/plain',String(n))};
+   card.ondragover=event=>{if(dragFrom!==null)event.preventDefault()};
+   card.ondrop=event=>{event.preventDefault();const from=dragFrom;dragFrom=null;if(from!==null)moveSlide(from,n)};
+   card.ondragend=()=>{dragFrom=null};
+  });
+  const count=item?.slides.length||0;
+  $('slideMoveLeft').disabled=!item||index===0;$('slideMoveRight').disabled=!item||index>=count-1;
+  $('slideDuplicate').disabled=!item||count>=200;$('slideDelete').disabled=!item||count<2;
+ };
+ // Reordering, duplicating and deleting slides. Everything stored per slide (section labels, screen targets,
+ // the second translation) moves with its slide; the live slide keeps pointing at the same slide.
+ let dragFrom=null;
+ const PER_SLIDE=['slides','sectionLabels','slideScreens','secondarySlides'];
+ function changeSlides(change,newIndex){
+  const item=current();if(!item)return false;
+  const before=structuredClone(item),order=change([...item.slides.keys()]);
+  PER_SLIDE.forEach(key=>{if(Array.isArray(item[key]))item[key]=order.map(n=>item[key][n])});
+  // A combined passage's saved separate verses no longer line up once its slides change.
+  if(item.slides.length!==before.slides.length){delete item.verseSlides;delete item.secondaryVerseSlides}
+  if(!valid(service)||!persist()){Object.keys(item).forEach(key=>delete item[key]);Object.assign(item,before);toast('Unable to change the slides.');render();return false}
+  if(livePosition?.id===item.id){const moved=order.indexOf(livePosition.index);livePosition=moved<0?null:{...livePosition,index:moved}}
+  index=newIndex;render();return true;
+ }
+ function moveSlide(from,to){
+  const item=current();if(!item||from===to||to<0||to>=item.slides.length)return;
+  changeSlides(order=>{const [slide]=order.splice(from,1);order.splice(to,0,slide);return order},to);
+ }
+ $('slideMoveLeft').onclick=()=>moveSlide(index,index-1);
+ $('slideMoveRight').onclick=()=>moveSlide(index,index+1);
+ $('slideDuplicate').onclick=()=>{
+  const item=current();if(!item)return;
+  if(item.slides.length>=200){toast('An item can have at most 200 slides.');return}
+  changeSlides(order=>{order.splice(index+1,0,index);return order},index+1);
+ };
+ $('slideDelete').onclick=()=>{
+  const item=current();if(!item)return;
+  if(item.slides.length<2){toast('An item needs at least one slide.');return}
+  if(!confirm('Delete this slide from the item? Your live output stays unchanged.'))return;
+  const removed=index;changeSlides(order=>{order.splice(removed,1);return order},Math.min(removed,item.slides.length-2));
  };
  // Per-slide audience screen ("" all screens, "1", "2"), shown on the thumbnails and set below the slides.
  function renderSlideScreens(){
@@ -323,7 +365,7 @@ if(mode==='audience'||mode==='stage'){
   const candidate=structuredClone(service);candidate.items.find(i=>i.id===targetId).template=template;
   if(new Blob([JSON.stringify(candidate)]).size>4800000){toast('This service is too large. Use a smaller background image.');return false}
   const previous=item.template;item.template=template;
-  if(!persist()){item.template=previous;toast('Unable to save the template. Export a backup or use a smaller image.');return false}
+  if(!persist()){item.template=previous;toast('Unable to save the template. Use Back up or use a smaller image.');return false}
   render();return true;
  }
  SlideTemplate.fonts.forEach(font=>{const option=document.createElement('option');option.value=font;option.textContent=font+(SlideTemplate.bundledFonts[font]?' · included':'');option.style.fontFamily=font;$('textFont').append(option)});
@@ -452,10 +494,14 @@ if(mode==='audience'||mode==='stage'){
  }
  // Each bundled translation loads once, on first use, and stays in memory.
  const bibleLoads=new Map();
+ // Licensed versions added in Settings (installed app only): [{id, name, language, licensed:true}].
+ let licensedVersions=[];
+ function allVersions(){return [...WorshipBible.versions,...licensedVersions]}
  function loadBible(id){
-  const version=WorshipBible.versions.find(v=>v.id===id);if(!version)return Promise.reject(Error('Unknown Bible version.'));
+  const version=allVersions().find(v=>v.id===id);if(!version)return Promise.reject(Error('Unknown Bible version.'));
   if(!bibleLoads.has(id)){
-   const loading=fetch(version.file).then(response=>{if(!response.ok)throw Error(id+' data is unavailable.');return response.text()}).then(WorshipBible.parse);
+   const text=version.licensed?window.worshipDesktop.readBible(id):fetch(version.file).then(response=>{if(!response.ok)throw Error(id+' data is unavailable.');return response.text()});
+   const loading=text.then(WorshipBible.parse);
    loading.catch(()=>bibleLoads.delete(id));bibleLoads.set(id,loading);
   }
   return bibleLoads.get(id);
@@ -475,14 +521,53 @@ if(mode==='audience'||mode==='stage'){
  // Main version: the bundled Bible in the main language (KJV or Reina-Valera 1909), or another translation from YouVersion.
  // The bundled Bible supplies the book/chapter/verse structure for the selectors.
  const YOUVERSION='YOUVERSION';
- function bibleVersion(){return WorshipBible.versions.find(v=>v.id===(serviceLanguage()==='es'?'RVR1909':'KJV'))}
+ function bundledVersion(){return WorshipBible.versions.find(v=>v.id===(serviceLanguage()==='es'?'RVR1909':'KJV'))}
+ // The chosen bundled or licensed version; YouVersion uses the bundled Bible for its book/chapter/verse structure.
+ function bibleVersion(){return licensedVersions.find(v=>v.id===$('bibleVersion').value)||bundledVersion()}
  function renderVersionChoices(){
-  const youVersionWasChosen=$('bibleVersion').value===YOUVERSION;
-  fillBibleOptions('bibleVersion',[bibleVersion(),{id:YOUVERSION,name:serviceLanguage()==='es'?'Otra versión · YouVersion':'Another version · YouVersion'}],youVersionWasChosen?YOUVERSION:bibleVersion().id);
+  const chosen=$('bibleVersion').value,keep=chosen===YOUVERSION||licensedVersions.some(v=>v.id===chosen);
+  const licensed=licensedVersions.map(v=>({id:v.id,name:v.name+' ('+v.id+')'}));
+  fillBibleOptions('bibleVersion',[bundledVersion(),...licensed,{id:YOUVERSION,name:serviceLanguage()==='es'?'Otra versión · YouVersion':'Another version · YouVersion'}],keep?chosen:bundledVersion().id);
   const preferred=WorshipBible.youVersions.filter(v=>(v.language||'en')===serviceLanguage()).concat(WorshipBible.youVersions.filter(v=>(v.language||'en')!==serviceLanguage()));
   fillBibleOptions('youVersionId',preferred.map(v=>({id:v.abbr,name:v.abbr+' · '+v.name})),preferred[0].abbr);
  }
  renderVersionChoices();
+ // Settings → Licensed Bible versions: list, add from a text file, remove.
+ function renderLicensed(){
+  const list=$('licensedList');list.replaceChildren();
+  if(!window.worshipDesktop?.listBibles){const note=document.createElement('p');note.className='subtle';note.textContent='Licensed versions can be added in the installed app.';list.append(note);$('licensedFile').disabled=true;return}
+  if(!licensedVersions.length){const note=document.createElement('p');note.className='subtle';note.textContent='No licensed versions added yet.';list.append(note)}
+  licensedVersions.forEach(version=>{
+   const row=document.createElement('div');row.className='licensed-row';
+   const label=document.createElement('span');label.textContent=version.id+' · '+version.name+' · '+(version.language==='es'?'Spanish (Español)':'English');
+   const remove=document.createElement('button');remove.type='button';remove.textContent='Remove';
+   remove.onclick=async()=>{
+    if(!confirm('Remove '+version.id+' from this computer? Slides already made with it stay in your services.'))return;
+    try{await window.worshipDesktop.deleteBible(version.id);bibleLoads.delete(version.id);await refreshLicensed();$('licensedStatus').textContent=version.id+' removed from this computer.'}
+    catch(error){$('licensedStatus').textContent=cleanError(error)}
+   };
+   row.append(label,remove);list.append(row);
+  });
+ }
+ async function refreshLicensed(){
+  try{licensedVersions=window.worshipDesktop?.listBibles?(await window.worshipDesktop.listBibles()).map(v=>({...v,licensed:true})):[]}catch{licensedVersions=[]}
+  renderLicensed();renderVersionChoices();
+ }
+ $('licensedFile').onchange=async event=>{
+  const file=event.target.files[0];if(!file)return;
+  const version={id:$('licensedId').value.trim().toUpperCase(),name:$('licensedName').value.trim(),language:$('licensedLanguage').value};
+  try{
+   if(!/^[A-Z0-9]{2,12}$/.test(version.id))throw Error('Enter the abbreviation (for example NIV) before choosing the file.');
+   if(!version.name)throw Error('Enter the version name before choosing the file.');
+   $('licensedStatus').textContent='Checking '+version.id+'…';
+   const saved=await window.worshipDesktop.saveBible(version,await file.text());
+   bibleLoads.delete(saved.id);await refreshLicensed();
+   $('licensedId').value='';$('licensedName').value='';
+   $('licensedStatus').textContent=saved.id+' added. Choose it under Version when adding Scripture.';
+  }catch(error){$('licensedStatus').textContent=cleanError(error)||'Could not add that Bible file.'}
+  finally{event.target.value=''}
+ };
+ refreshLicensed();
  function usingYouVersion(){return $('bibleVersion').value===YOUVERSION}
  function youVersion(){return WorshipBible.youVersions.find(v=>v.abbr===$('youVersionId').value)||WorshipBible.youVersions[0]}
  function mainLanguage(){return usingYouVersion()?youVersion().language||'en':bibleVersion().language}
@@ -820,7 +905,7 @@ if(mode==='audience'||mode==='stage'){
   }catch(error){$('scriptureImportStatus').textContent=error.message||'Could not add that Scripture passage.'}
  };
  $('export').onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(service,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='worshipui-service.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
- $('import').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{if(file.size>5e6)throw Error();const s=JSON.parse(await file.text());if(!valid(s))throw Error();if(!confirm('Replace the current service with this backup? Export first if you want to keep it.'))return;service=s;selected=s.items[0]?.id;index=0;persist();render();toast('Service imported')}catch{toast('Could not import. Choose a valid WorshipUI JSON backup under 5 MB.')}finally{e.target.value=''}};
+ $('import').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{if(file.size>5e6)throw Error();const s=JSON.parse(await file.text());if(!valid(s))throw Error();if(!confirm('Replace the current service with this backup? Use Back up first if you want to keep it.'))return;service=s;selected=s.items[0]?.id;index=0;persist();render();toast('Service imported')}catch{toast('Could not import. Choose a valid WorshipUI JSON backup under 5 MB.')}finally{e.target.value=''}};
  // Church branding: edited in Settings, shown in the header and on blackout, shared through sync.js.
  let brandingLogo='',brandingConflict=null;
  function renderBranding(){
@@ -1001,7 +1086,7 @@ if(mode==='audience'||mode==='stage'){
      if(!next.entries[key])next.entries[key]={service:copy?structuredClone(service):structuredClone(empty),baseRevision:0,baseService:structuredClone(empty)};
      else if(copy)next.entries[key].service=structuredClone(service);
      next.active=key;
-     try{saveLibrary(next)}catch{toast('Could not save the selected setlist. Export a backup and check storage.');return false}
+     try{saveLibrary(next)}catch{toast('Could not save the selected setlist. Use Back up and check storage.');return false}
      service=structuredClone(next.entries[key].service);selected=service.items[0]?.id;index=0;render();return true;
    },
    // Removes a saved dated setlist from this computer (not the one that is open). Its service goes into the
@@ -1023,7 +1108,7 @@ if(mode==='audience'||mode==='stage'){
      const additions=items.map(item=>{const addition={id:crypto.randomUUID(),title:item.title.trim(),type:item.type,theme:item.theme||(item.type==='Scripture'?'ember':'dusk'),slides:item.slides};['primaryVersion','secondaryVersion','secondarySlides','fitText','verseSlides','secondaryVerseSlides'].forEach(key=>{if(item[key]!==undefined)addition[key]=item[key]});return addition});
      const candidate=structuredClone(service);candidate.items.push(...additions);
      if(!valid(candidate)){toast('Imported content exceeds the service limits.');return false}
-     if(new Blob([JSON.stringify(candidate)]).size>4800000){toast('This service is too large to add the imported content. Export a backup or use smaller files.');return false}
+     if(new Blob([JSON.stringify(candidate)]).size>4800000){toast('This service is too large to add the imported content. Use Back up or use smaller files.');return false}
      const previous=service,previousSelected=selected,previousIndex=index;
      service=candidate;selected=additions[0].id;index=0;
      if(!persist()){service=previous;selected=previousSelected;index=previousIndex;render();return false}

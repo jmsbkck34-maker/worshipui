@@ -28,7 +28,7 @@
      const date=bridge.getDate(),entry=bridge.getDateEntry(date);
      if(entry&&!bridge.setDateEntry(date,{...entry,baseRevision:meta.baseRevision,baseService:structuredClone(meta.baseService)}))throw Error('Setlist metadata could not be saved');
      workspaceStorage.setItem(META,JSON.stringify(meta));return true;
-   }catch{status('Sync paused: device storage is full. Export a backup.');return false}
+   }catch{status('Sync paused: device storage is full. Use Back up.');return false}
  }
  function dirty(){return !meta.baseService||!core.same(bridge.getService(),meta.baseService)}
  function status(text){$('syncStatus').textContent=text}
@@ -82,12 +82,12 @@
  }
  function backup(){
    try{let versions=JSON.parse(workspaceStorage.getItem(RECOVERY)||'[]');versions.push({at:new Date().toISOString(),service:bridge.getService()});workspaceStorage.setItem(RECOVERY,JSON.stringify(versions.slice(-5)));return true}
-   catch{status('Cannot save recovery copy. Export your local service before applying.');return false}
+   catch{status('Cannot save recovery copy. Use Back up before applying.');return false}
  }
  function apply(version){
    if(!bridge.valid(version.service)||!backup())return false;
    const oldService=bridge.getService(),oldMeta=structuredClone(meta);
-   if(!bridge.replace(version.service)){status('Cannot save update on this device. Export a backup.');return false}
+   if(!bridge.replace(version.service)){status('Cannot save update on this device. Use Back up.');return false}
    meta.baseRevision=version.revision;meta.baseService=structuredClone(version.service);
    if(!saveMeta()){meta=oldMeta;bridge.replace(oldService);return false}
    pending=null;status('All changes downloaded · revision '+version.revision);label();return true;
@@ -172,7 +172,7 @@
          const saved=await api(serviceUrl(date),{method:'PUT',body:JSON.stringify({baseRevision:entry.baseRevision,service:entry.service})});
          entry.baseRevision=saved.version.revision;entry.baseService=structuredClone(entry.service);
        }else{status('Setlist '+(date||'(undated)')+' has conflicting changes · open it to review');continue}
-       if(!bridge.setDateEntry(date,entry))throw Error('Cannot save sync state for '+(date||'the undated service')+'. Export a backup.');
+       if(!bridge.setDateEntry(date,entry))throw Error('Cannot save sync state for '+(date||'the undated service')+'. Use Back up.');
      }
    }catch(error){status(error.message||'Offline · dated setlists are saved on this device')}
    finally{busy=false;label()}
