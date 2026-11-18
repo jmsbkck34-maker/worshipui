@@ -146,6 +146,24 @@ The live column's **Audience screens** panel opens Screen 1 and Screen 2 and set
 
 The **English / Español** toggle also switches the whole interface — menus, buttons, dialogs, status messages and the Audience/Stage windows — between English and Spanish (`i18n.js`). Slide content, item titles, lyrics, Scripture and anything typed into fields are never translated. `tests/i18n.test.mjs` fails if a new label in `index.html` has no Spanish translation.
 
+## Spanish song lyrics and the offline translator (0.3.6–0.3.7)
+
+A song can carry lyrics in the second language: in the song editor, paste them into **Lyrics in the second language**, one blank-line block per slide in the same order as the main lyrics. Screens set to the second language show them; screens set to both show them side by side. Reordering or duplicating slides keeps each translation with its slide, and the song library keeps and searches them.
+
+**Translate the lyrics** fills that box automatically, English ↔ Spanish, on the computer itself (no internet, nothing sent anywhere). It translates line by line in a background worker, keeps markers such as `(x2)` and `[Chorus]`, and keeps the slide layout. Machine translation can miss meaning and rhythm, so the operator reads it through before saving; an official Spanish version from the publisher (often on SongSelect) is better when there is one.
+
+The translator is not stored in Git. `node tools/fetch-translator.mjs` downloads it into `assets/translator/` (about 270 MB for both directions; `node tools/fetch-translator.mjs en-es` for one) and checks every file against `tools/translator-pins.json`. It is [Transformers.js](https://github.com/huggingface/transformers.js) 3.7.5 with ONNX Runtime Web (Apache-2.0, Hugging Face and Microsoft) and the Opus-MT English–Spanish models by Helsinki-NLP (Apache-2.0; ONNX conversion by Xenova). The release workflow runs the download before building. Only the translator worker may compile WebAssembly; the page keeps its strict content security policy.
+
+## Three downloads: English and Spanish, English only, Mac
+
+Each release has three installers:
+
+- `WorshipUI-Setup-<version>.exe`: Windows, English and Spanish, with the offline translator.
+- `WorshipUI-English-Setup-<version>.exe`: Windows, English only. `npm run build:win:english` builds it into `release-english/`. It is the same app with `worshipuiEdition: "english"` in its package.json, which hides the English/Español toggle, the second-language settings, Scripture and song second-language fields and the per-screen language choice, and leaves out the translator, so it is about 75 MB smaller. To try it from source, set `WORSHIPUI_EDITION=english`.
+- `WorshipUI-<version>-mac.dmg`: Mac, English and Spanish (universal).
+
+All three share the app ID and data folder, so installing one over another keeps setlists and songs. The Mac build runs on GitHub's Intel Mac machines because Apple Silicon ones are often full, and the Windows downloads are published even when no Mac machine is free. Re-run the workflow later to add the Mac file.
+
 ## macOS
 
 GitHub builds the Mac app automatically (`.github/workflows/build-mac.yml`) on every push to a `work/**` branch or `main`, and when run by hand from the **Actions** tab. Open the finished run and download **WorshipUI-mac** under *Artifacts*. It contains `WorshipUI-<version>-mac.dmg`, a universal app for Intel and Apple Silicon Macs. To build on a Mac yourself: `npm ci`, then `npm run build:mac`.

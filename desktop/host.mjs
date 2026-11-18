@@ -9,6 +9,15 @@ FILES.set('/bible-search.js',['bible-search.js','text/javascript']);
 FILES.set('/assets/bibles/kjv.vpl.txt',['assets/bibles/kjv.vpl.txt','text/plain']);
 FILES.set('/assets/bibles/web.vpl.txt',['assets/bibles/web.vpl.txt','text/plain']);
 FILES.set('/assets/bibles/rv1909.vpl.txt',['assets/bibles/rv1909.vpl.txt','text/plain']);
+// Offline lyric translator (assets/translator, downloaded by tools/fetch-translator.mjs). Only these exact files are served.
+const TRANSLATOR=/^\/translate\/(manifest\.json|runtime\/(?:transformers\.min\.js|ort-wasm-simd-threaded\.jsep\.(?:mjs|wasm))|models\/(?:en-es|es-en)\/(?:config\.json|generation_config\.json|tokenizer\.json|tokenizer_config\.json|onnx\/(?:encoder_model_quantized|decoder_model_merged_quantized)\.onnx))$/;
+const TRANSLATOR_TYPES={json:'application/json',js:'text/javascript',mjs:'text/javascript',wasm:'application/wasm',onnx:'application/octet-stream'};
+// The worker alone may compile WebAssembly; the page keeps the strict policy.
+const WORKER_POLICY="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'";
+async function serveTranslator(res,file,type){
+ let info;try{info=await stat(file)}catch{res.writeHead(404,{'Content-Type':'application/json'});res.end('{"error":"Not found"}');return}
+ res.writeHead(200,{'Content-Type':type,'Content-Length':info.size});createReadStream(file).pipe(res);
+}
 const ENDPOINTS=new Set(['/api/me','/api/login','/api/logout','/api/service','/api/versions','/api/branding']);
 // Media files for "Images & video" slides, served from the app's media folder with byte ranges (video seeking).
 const MEDIA_TYPES={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',gif:'image/gif',mp4:'video/mp4',webm:'video/webm',m4v:'video/mp4',mov:'video/quicktime'};
@@ -35,6 +44,9 @@ export async function createDesktopHost(root,initialOrigin='',remoteFetch=fetch,
    const url=new URL(req.url,origin);
    const media=/^\/media\/([a-f0-9]{32}\.(?:png|jpg|jpeg|webp|gif|mp4|webm|m4v|mov))$/.exec(url.pathname);
    if(media&&mediaDir&&req.method==='GET')return serveMedia(req,res,mediaDir,media[1]);
+   if(req.method==='GET'&&url.pathname==='/translate-worker.js'){res.setHeader('Content-Security-Policy',WORKER_POLICY);return serveTranslator(res,path.join(root,'translate-worker.js'),'text/javascript')}
+   const translatorFile=TRANSLATOR.exec(url.pathname);
+   if(translatorFile&&req.method==='GET'){res.setHeader('Content-Security-Policy',WORKER_POLICY);return serveTranslator(res,path.join(root,'assets','translator',...translatorFile[1].split('/')),TRANSLATOR_TYPES[translatorFile[1].split('.').pop()])}
    if(!url.pathname.startsWith('/api/')){
     const file=FILES.get(url.pathname);if(!file||req.method!=='GET')return reply(404,{error:'Not found'});
     res.writeHead(200,{'Content-Type':file[1]+'; charset=utf-8'});res.end(await readFile(path.join(root,file[0])));return;

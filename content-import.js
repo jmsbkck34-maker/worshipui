@@ -178,5 +178,14 @@
   if(extension==='usx')return {reference:'',slides:parseUsx(source)};
   throw Error('Choose a .txt, scripture .csv, .usfm, or .usx file.');
  }
- root.WorshipContentImport=Object.freeze({parseLyricsFile,parseScriptureFile,parseScriptureText:value=>checkedSlides(splitTextSlides(sourceText(value)))});
+ // Lyric translation: the lines worth translating, and the slides rebuilt in the same shape afterwards.
+ // Lines with no letters, or markers like "(x2)" and "[Chorus]", are kept as they are.
+ const keepLine=line=>!/\p{L}/u.test(line)||/^\s*[\[(][^\])]*[\])]\s*$/.test(line);
+ function lyricLineJobs(slides){const jobs=[];slides.forEach((slide,s)=>slide.split('\n').forEach((line,l)=>{if(!keepLine(line))jobs.push({s,l,text:line.trim()})}));return jobs}
+ function rebuildLyrics(slides,jobs,translated){
+  if(!Array.isArray(translated)||translated.length!==jobs.length)throw Error('The translation came back incomplete. Try again.');
+  const out=slides.map(slide=>slide.split('\n'));jobs.forEach((job,n)=>{out[job.s][job.l]=String(translated[n]||'').trim()||job.text});
+  return out.map(lines=>lines.join('\n'));
+ }
+ root.WorshipContentImport=Object.freeze({lyricLineJobs,rebuildLyrics,parseLyricsFile,parseScriptureFile,parseScriptureText:value=>checkedSlides(splitTextSlides(sourceText(value)))});
 })(window);

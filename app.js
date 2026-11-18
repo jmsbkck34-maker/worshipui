@@ -1,5 +1,7 @@
 /* WorshipUI: local-first, dependency-free service workspace. */
 const workspaceStorage=window.worshipStorage||localStorage;
+// English edition (a separate, smaller installer): one language, so second-language controls are hidden.
+const ENGLISH_ONLY=window.worshipDesktop?.edition==='english';
 const KEY='worshipui.service.v1', LIVE='worshipui.live.v1', CCLI_KEY='worshipui.ccli.v1', LIBRARY='worshipui.setlists.v1', BRANDING='worshipui.branding.v1';
 const emptyCcliSettings={churchCopyright:'',streaming:'',streamingPlus:'',rehearsal:''};
 const ccliSettingKeys=Object.keys(emptyCcliSettings);
@@ -621,6 +623,11 @@ if(mode==='audience'||mode==='stage'){
  }
  $('langEn').onclick=()=>setServiceLanguage('en');$('langEs').onclick=()=>setServiceLanguage('es');
  renderLanguageToggle();
+ if(ENGLISH_ONLY){
+  if(serviceLanguage()!=='en')saveLanguageSettings({mainLanguage:'en'});window.WorshipI18n?.setLanguage('en');
+  document.querySelector('.language-toggle').hidden=true;document.querySelector('.language-section').hidden=true;
+  ['screen1Show','screen2Show','audience1Show','audience2Show','streamShow'].forEach(id=>{$(id).hidden=true});
+ }
  // The second Bible: the bundled version for the chosen language, unless it is the same language as the main version.
  function secondBible(){
   const language=secondLanguage(),version=WorshipBible.versions.find(v=>v.id===language.bible);
@@ -631,7 +638,7 @@ if(mode==='audience'||mode==='stage'){
  function renderSecondOption(){
   const version=secondBible(),language=secondLanguage(),on=!!version&&addSecondLanguage;
   renderFillSecond();
-  $('bibleSecond').hidden=!version;$('bibleSecond').setAttribute('aria-pressed',String(on));
+  $('bibleSecond').hidden=!version||ENGLISH_ONLY;$('bibleSecond').setAttribute('aria-pressed',String(on));
   $('bibleSecond').textContent=!version?'':on?'✓ '+language.name+' added · '+version.id+' (click to remove)':'+ Add '+language.name+' · '+version.id;
  }
  $('bibleSecond').onclick=()=>{addSecondLanguage=!addSecondLanguage;renderSecondOption()};
@@ -816,7 +823,7 @@ if(mode==='audience'||mode==='stage'){
  };
  function openEditor(isEdit){editing=isEdit;chosenSongStyle=null;chosenSongSlides=null;chosenScriptureFit=null;chosenVerseSlides=null;chosenSecondVerseSlides=null;addSecondLanguage=false;captured=null;$('fillSecondStatus').textContent='';const i=isEdit?current():null;$('dialogTitle').textContent=isEdit?'Edit service item':'Add to your service';$('titleInput').value=i?.title||'';$('typeInput').value=i?.type||'Song';$('textInput').value=i?.slides.join('\n\n')||'';$('itemPrimaryVersion').value=i?.primaryVersion||'';$('itemSecondaryVersion').value=i?.secondaryVersion||'';$('itemSecondaryText').value=i?.secondarySlides?.join('\n\n')||'';$('songSecondText').value=i?.type==='Song'?i.secondarySlides?.join('\n\n')||'':'';$('songSearch').value='';$('delete').hidden=!isEdit;fillCountdownFields(i?.type==='Countdown'?i.countdown:null);mediaDraft=i?.type==='Media'?structuredClone(i.media):[];updateItemTranslationFields();renderSongs();$('itemDialog').showModal()}
  $('add').onclick=()=>openEditor(false);$('edit').onclick=()=>openEditor(true);$('cancel').onclick=()=>$('itemDialog').close();
- function updateItemTranslationFields(){const type=$('typeInput').value;$('countdownFields').hidden=type!=='Countdown';$('mediaFields').hidden=type!=='Media';$('textInputRow').hidden=type==='Countdown'||type==='Media';$('textInput').required=type!=='Countdown'&&type!=='Media';renderMediaDraft();renderCountdownFields();$('translationFields').hidden=type!=='Scripture';$('bibleTools').hidden=type!=='Scripture';$('songTools').hidden=type!=='Song';$('saveSongTemplate').hidden=type!=='Song';$('songLanguageFields').hidden=type!=='Song';$('titleInput').required=type!=='Scripture';$('titleLabel').textContent=type==='Scripture'?'Title (optional)':'Title';if(type==='Scripture')return prepareBible()}
+ function updateItemTranslationFields(){const type=$('typeInput').value;$('countdownFields').hidden=type!=='Countdown';$('mediaFields').hidden=type!=='Media';$('textInputRow').hidden=type==='Countdown'||type==='Media';$('textInput').required=type!=='Countdown'&&type!=='Media';renderMediaDraft();renderCountdownFields();$('translationFields').hidden=type!=='Scripture'||ENGLISH_ONLY;$('bibleTools').hidden=type!=='Scripture';$('songTools').hidden=type!=='Song';$('saveSongTemplate').hidden=type!=='Song';$('songLanguageFields').hidden=type!=='Song'||ENGLISH_ONLY;if(type==='Song'&&!ENGLISH_ONLY)renderTranslateButton();$('titleInput').required=type!=='Scripture';$('titleLabel').textContent=type==='Scripture'?'Title (optional)':'Title';if(type==='Scripture')return prepareBible()}
  $('typeInput').onchange=updateItemTranslationFields;
  // Countdown editor: a length of time or a clock time, text above the timer, and what happens at zero.
  function renderCountdownFields(){
@@ -851,6 +858,38 @@ if(mode==='audience'||mode==='stage'){
    $('mediaStatus').textContent=deck.media.length+' slides imported from PowerPoint.'+(deck.animated?' '+deck.animated+' had animations, which pictures cannot keep — check those slides.':'')+' Save the item to use them.';
   }catch(error){$('mediaStatus').textContent=String(error.message||'').replace(/^Error invoking remote method '[^']+': (Error: )?/,'')||'Could not import that presentation.'}
   finally{$('importPowerPoint').disabled=false}
+ };
+ // Offline lyric translation (desktop app with the translator installed): English ↔ Spanish, line by line,
+ // in a worker. The result fills the second-language box for the operator to check before saving.
+ let translatorDirections=null,translatorWorker=null,translateRequest=0;
+ const translateDirection=()=>serviceLanguage()+'-'+secondLanguage().id;
+ async function renderTranslateButton(){
+  if(translatorDirections===null){translatorDirections=[];try{const response=await fetch('/translate/manifest.json');if(response.ok){const manifest=await response.json();if(Array.isArray(manifest?.directions))translatorDirections=manifest.directions}}catch{}}
+  $('translateLyrics').hidden=!(window.worshipTranslate||translatorDirections.length);
+  $('translateLyrics').disabled=!(window.worshipTranslate||translatorDirections.includes(translateDirection()));
+  if(!$('translateLyrics').hidden&&$('translateLyrics').disabled)$('translateStatus').textContent='Offline translation works between English and Spanish.';
+ }
+ function workerTranslate(direction,lines,progress){
+  translatorWorker=translatorWorker||new Worker('/translate-worker.js',{type:'module'});
+  const id=++translateRequest;
+  return new Promise((resolve,reject)=>{
+   translatorWorker.onmessage=({data})=>{if(data.id!==id)return;if(data.error)reject(Error(data.error));else if(data.result)resolve(data.result);else progress(data.progress,data.total)};
+   translatorWorker.onerror=()=>{translatorWorker=null;reject(Error('The translator could not start.'))};
+   translatorWorker.postMessage({id,direction,lines});
+  });
+ }
+ $('translateLyrics').onclick=async()=>{
+  const slides=$('textInput').value.trim().split(/\n\s*\n/).filter(Boolean);
+  if(!slides.length){$('translateStatus').textContent='Enter the lyrics first.';return}
+  if($('songSecondText').value.trim()&&!confirm('Replace the second-language lyrics with a new translation?'))return;
+  const jobs=WorshipContentImport.lyricLineJobs(slides),translate=window.worshipTranslate||workerTranslate;
+  $('translateLyrics').disabled=true;$('translateStatus').textContent='Loading the translator…';
+  try{
+   const translated=await translate(translateDirection(),jobs.map(job=>job.text),(done,total)=>{$('translateStatus').textContent='Translating line '+Math.min(done+1,total)+' of '+total+'…'});
+   $('songSecondText').value=WorshipContentImport.rebuildLyrics(slides,jobs,translated).join('\n\n');
+   $('translateStatus').textContent='Translated on this computer. Machine translation can miss the meaning or the rhythm, so read it through before you sing it.';
+  }catch(error){$('translateStatus').textContent=error.message||'Could not translate the lyrics.'}
+  finally{$('translateLyrics').disabled=false}
  };
  $('countdownMode').onchange=renderCountdownFields;$('countdownEnd').onchange=renderCountdownFields;
  function fillCountdownFields(countdown){

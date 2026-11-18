@@ -437,6 +437,27 @@ check(licensedItem.primaryVersion,'NIV');check(licensedItem.slides[0].startsWith
  bilingual.node('songSecondText').value='Sublime gracia\n\nPerdido anduve';bilingual.node('itemForm').onsubmit({preventDefault(){}});
  const bilingualSong=bilingual.context.worshipWorkspace.getService().items.find(item=>item.title==='Amazing Grace');
  check(bilingualSong.secondarySlides,['Sublime gracia','Perdido anduve']);check(bilingualSong.primaryVersion,undefined);check(typeof bilingualSong.secondaryVersion,'string');
+ // Translate the lyrics: each line with words is translated, markers stay, and the slides keep their shape.
+ const translating=await client('operator',false);
+ translating.context.worshipTranslate=async(direction,lines,progress)=>{progress(0,lines.length);return lines.map(line=>direction+':'+line)};
+ translating.node('add').onclick();translating.node('typeInput').value='Song';await translating.node('typeInput').onchange?.();
+ await new Promise(resolve=>setImmediate(resolve));
+ check(translating.node('translateLyrics').hidden,false);
+ translating.node('textInput').value='Hello world\n(x2)\n\nSecond slide';translating.node('songSecondText').value='';
+ await translating.node('translateLyrics').onclick();
+ check(translating.node('songSecondText').value,'en-es:Hello world\n(x2)\n\nen-es:Second slide');
+ // Without the translator installed (browser, English-only build) the button stays hidden.
+ const noTranslator=await client('operator',false);
+ noTranslator.node('add').onclick();noTranslator.node('typeInput').value='Song';await noTranslator.node('typeInput').onchange?.();
+ await new Promise(resolve=>setImmediate(resolve));
+ check(noTranslator.node('translateLyrics').hidden,true);
+ // English edition: no second-language fields for songs or Scripture, and no per-screen language choice.
+ const english=await client('operator',false,null,{edition:'english',importMedia:async()=>[]});
+ check(english.node('screen1Show').hidden,true);
+ english.node('add').onclick();english.node('typeInput').value='Song';await english.node('typeInput').onchange?.();
+ check(english.node('songLanguageFields').hidden,true);
+ english.node('typeInput').value='Scripture';await english.node('typeInput').onchange?.();
+ check(english.node('translationFields').hidden,true);
  const remoteEditor=await client('editor',false);remoteEditor.node('slides').children[1].onclick();remoteEditor.node('slides').children[1].onclick();check(remoteEditor.storage.has(liveKey),false);
  return checks;
 }

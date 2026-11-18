@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   build-mac:
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -29,6 +29,8 @@ jobs:
         env:
           GOOGLE_CLIENT_JSON: ${{ secrets.GOOGLE_CLIENT_JSON }}
         run: if [ -n "$GOOGLE_CLIENT_JSON" ]; then printf "%s" "$GOOGLE_CLIENT_JSON" > desktop/google-client.json; fi
+      - name: Download the offline lyric translator (checked against pinned checksums)
+        run: node tools/fetch-translator.mjs
       - run: npm run build:mac
       - uses: actions/upload-artifact@v4
         with:

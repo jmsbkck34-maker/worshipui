@@ -1,5 +1,9 @@
-# Publishes a GitHub Release with the Windows installer and the macOS app when a version tag (v1.2.3) is pushed.
+# Publishes a GitHub Release when a version tag (v1.2.3) is pushed, with three downloads:
+#   WorshipUI-Setup-<version>.exe          Windows, English and Spanish (with the offline lyric translator)
+#   WorshipUI-English-Setup-<version>.exe  Windows, English only (smaller)
+#   WorshipUI-<version>-mac.dmg            Mac, English and Spanish
 # Share https://github.com/<owner>/<repo>/releases/latest — anyone can download without a GitHub account.
+# Windows is published even if no Mac build machine is free; re-run the workflow later to add the Mac file.
 name: Release
 
 on:
@@ -12,7 +16,7 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,16 +30,22 @@ jobs:
         env:
           GOOGLE_CLIENT_JSON: ${{ secrets.GOOGLE_CLIENT_JSON }}
         run: if [ -n "$GOOGLE_CLIENT_JSON" ]; then printf "%s" "$GOOGLE_CLIENT_JSON" > desktop/google-client.json; fi
+      - name: Download the offline lyric translator (checked against pinned checksums)
+        run: node tools/fetch-translator.mjs
       - run: npm run build:win
+      - run: npm run build:win:english
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: release/*.exe
+          path: |
+            release/*.exe
+            release-english/*.exe
           if-no-files-found: error
 
   mac:
-    runs-on: macos-latest
-    timeout-minutes: 30
+    # Intel Mac build machines: Apple Silicon ones are often full. The app is still universal (Intel and Apple Silicon).
+    runs-on: macos-15-intel
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -49,6 +59,8 @@ jobs:
         env:
           GOOGLE_CLIENT_JSON: ${{ secrets.GOOGLE_CLIENT_JSON }}
         run: if [ -n "$GOOGLE_CLIENT_JSON" ]; then printf "%s" "$GOOGLE_CLIENT_JSON" > desktop/google-client.json; fi
+      - name: Download the offline lyric translator (checked against pinned checksums)
+        run: node tools/fetch-translator.mjs
       - run: npm run build:mac
       - uses: actions/upload-artifact@v4
         with:
@@ -58,6 +70,7 @@ jobs:
 
   publish:
     needs: [windows, mac]
+    if: ${{ always() && needs.windows.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -71,8 +84,13 @@ jobs:
           name: WorshipUI ${{ github.ref_name }}
           files: dist/*
           body: |
-            **Windows:** download `WorshipUI-Setup-*.exe` and run it. If Windows says it protected your PC, choose **More info → Run anyway**.
+            **Pick one download:**
+            - **Windows, English and Spanish:** `WorshipUI-Setup-*.exe`, with the English/Español switch, Spanish lyrics and the offline lyric translator.
+            - **Windows, English only:** `WorshipUI-English-Setup-*.exe`, a smaller download for English-only churches.
+            - **Mac, English and Spanish:** `WorshipUI-*-mac.dmg`, for Intel and Apple Silicon Macs.
 
-            **Mac:** download `WorshipUI-*-mac.dmg`, open it and drag WorshipUI to Applications. The first time, open it, choose **Done**, then go to **System Settings → Privacy & Security → Open Anyway**. If macOS says the app is damaged, run `xattr -dr com.apple.quarantine /Applications/WorshipUI.app` in Terminal.
+            **Windows:** run the installer. If Windows says it protected your PC, choose **More info → Run anyway**.
 
-            The installers are not signed with a paid certificate, which is why the one-time approval is needed.
+            **Mac:** open the .dmg and drag WorshipUI to Applications. The first time, open it, choose **Done**, then go to **System Settings → Privacy & Security → Open Anyway**. If macOS says the app is damaged, run `xattr -dr com.apple.quarantine /Applications/WorshipUI.app` in Terminal.
+
+            The installers are not signed with a paid certificate, which is why the one-time approval is needed. Your setlists and songs stay in place when you install a new version.

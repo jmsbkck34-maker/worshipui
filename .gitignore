@@ -11,3 +11,5 @@ release/
 
 # Google sign-in client (added at build time from the GOOGLE_CLIENT_JSON secret; never committed)
 desktop/google-client.json
+assets/translator/
+release-english/

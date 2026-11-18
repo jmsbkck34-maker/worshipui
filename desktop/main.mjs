@@ -18,7 +18,9 @@ if(!single)app.quit();
 else {
  let main,host,store,settingsFile,settings={origin:''},closing=false;
  const windows=new Set();
- const preferences={preload:path.join(here,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true};
+ // Which installer this is: the English edition sets worshipuiEdition in its package.json (WORSHIPUI_EDITION=english to try it).
+ const edition=(()=>{try{return process.env.WORSHIPUI_EDITION==='english'||JSON.parse(readFileSync(path.join(app.getAppPath(),'package.json'),'utf8')).worshipuiEdition==='english'?'english':'bilingual'}catch{return 'bilingual'}})();
+ const preferences={preload:path.join(here,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,...(edition==='english'?{additionalArguments:['--wui-edition=english']}:{})};
  const trusted=event=>!!host&&windows.has(BrowserWindow.fromWebContents(event.sender))&&event.senderFrame?.url.startsWith(host.origin+'/');
  app.on('second-instance',()=>{if(main){if(main.isMinimized())main.restore();main.show();main.focus()}});
  app.whenReady().then(async()=>{

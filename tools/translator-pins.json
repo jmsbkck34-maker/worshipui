@@ -1,0 +1,17 @@
+{
+ "runtime/ort-wasm-simd-threaded.jsep.mjs": "08fb86ec433c78bfb032c5d84a68b8e8e5a8d81268fa39e24314179a5767a5b9",
+ "runtime/ort-wasm-simd-threaded.jsep.wasm": "c46655e8a94afc45338d4cb2b840475f88e5012d524509916e505079c00bfa39",
+ "models/en-es/config.json": "499eae1f97eeba63172fc884f92fd727ae803b7ceb79c0f653aa4b011152af2f",
+ "models/en-es/generation_config.json": "b743baabb7da4c1a2f19fe558bd6b4c0c7c3b0762fcb5ca7a48fe5a2c2219803",
+ "models/en-es/tokenizer.json": "285eb29e7155ee48851a77960797813f86a125f70d2c1a124f613f1fbd2b19c3",
+ "models/en-es/tokenizer_config.json": "dfb00189b823fb0f15464e9c4e68dd8594f5e5ef5f8dc497468a37741e73aa1f",
+ "models/en-es/onnx/encoder_model_quantized.onnx": "03434edd1147e6c49e22066e9dc5888235e99cc35a6711d1c4ea5b06455d5da9",
+ "models/en-es/onnx/decoder_model_merged_quantized.onnx": "58ee5ddd6e22d1693d8722b90c1486afb93700a4376cf28fd74175052ad530ae",
+ "models/es-en/config.json": "fab3a7f93185bc5aa7b419f6a1e6e74d98c8f2a506c94493d3019bf46da3478d",
+ "models/es-en/generation_config.json": "b743baabb7da4c1a2f19fe558bd6b4c0c7c3b0762fcb5ca7a48fe5a2c2219803",
+ "models/es-en/tokenizer.json": "285eb29e7155ee48851a77960797813f86a125f70d2c1a124f613f1fbd2b19c3",
+ "models/es-en/tokenizer_config.json": "e1fac15a910169d5b5ec07a13b0374273626a239b5142db10be229ca66cc52a9",
+ "models/es-en/onnx/encoder_model_quantized.onnx": "c01e70f8455efc350831aa2af7ed187b16829241f0018ba07d1ba643a391bc18",
+ "models/es-en/onnx/decoder_model_merged_quantized.onnx": "4cd91ab30240d295ce907b5100826031838c672005e57e524d711122d75605fa",
+ "runtime/transformers.min.js": "770f4cfc9857958f8db9c783b406b1c7f3beb3ce0c9b72776ca1e973dae9e145"
+}
