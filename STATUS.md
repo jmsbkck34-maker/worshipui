@@ -1,8 +1,10 @@
 # WorshipUI status — 2026-11-17
 
-Branch: `work/setlist-history-20261116` (version 0.3.7). Automated tests: 37 passing (`npm test`).
+Branch: `work/setlist-history-20261116` (version 0.3.8). Automated tests: 48 passing (`npm test`).
 
-Latest (0.3.7): Spanish song lyrics (one block per slide), an offline English↔Spanish lyric translator (`tools/fetch-translator.mjs`, not in Git), and three release downloads: Windows English/Spanish, Windows English only (`npm run build:win:english`), and Mac English/Spanish (built on Intel Mac runners; Windows publishes even if no Mac runner is free). 0.3.5 and 0.3.6 were never published because GitHub had no Apple Silicon Mac runners.
+Latest (0.3.8): an email inbox. Settings → Inbox connects an ordinary email account (IMAP, read-only; Gmail needs an app password), and ✉ Inbox next to the church name lists setlist and Scripture emails to add to the service. The release workflow now finds the Windows installers in their folders; 0.3.7 had published only the Mac download.
+
+Previous (0.3.7): Spanish song lyrics (one block per slide), an offline English↔Spanish lyric translator (`tools/fetch-translator.mjs`, not in Git), and three release downloads: Windows English/Spanish, Windows English only (`npm run build:win:english`), and Mac English/Spanish (built on Intel Mac runners; Windows publishes even if no Mac runner is free). 0.3.5 and 0.3.6 were never published because GitHub had no Apple Silicon Mac runners.
 
 ## Working in the demo
 

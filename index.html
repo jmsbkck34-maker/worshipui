@@ -13,6 +13,7 @@
   <div class="language-toggle" role="group" aria-label="Main language"><button id="langEn" type="button" aria-pressed="true">English</button><button id="langEs" type="button" aria-pressed="false">Español</button></div>
  </div>
  <span class="workspace"><img id="headerLogo" alt="" hidden><span id="churchName">SUNDAY WORKSPACE</span></span>
+ <button id="inboxButton" class="inbox-button" type="button" hidden title="Emails sent to the WorshipUI inbox">✉ Inbox<span id="inboxCount" class="inbox-count" hidden></span></button>
  <div class="header-actions">
   <span id="saveState" role="status">Saved on this device</span>
   <button id="settings" type="button">Settings</button>
@@ -110,6 +111,13 @@
  <p id="setlistFilesFolder" class="subtle"></p>
  <div id="setlistFilesList" class="setlist-files-list"></div>
  <button id="openOtherSetlistFile" type="button">Choose a file somewhere else…</button>
+</dialog>
+<dialog id="inboxDialog" aria-labelledby="inboxTitle">
+ <div class="settings-top"><div><div class="eyebrow">INBOX</div><h2 id="inboxTitle">Requests by email</h2></div><div><button id="refreshInbox" type="button">Check now</button><button id="closeInbox" type="button">Done</button></div></div>
+ <p id="inboxAddress" class="subtle"></p>
+ <p id="inboxStatus" class="subtle" role="status"></p>
+ <div id="inboxList" class="inbox-list" aria-label="Emails"></div>
+ <p class="subtle">Nothing is added to the service until you choose to add it. WorshipUI only reads this inbox; it does not delete emails or mark them as read.</p>
 </dialog>
 <dialog id="folderGuideDialog" aria-labelledby="folderGuideTitle">
  <div class="settings-top"><div><div class="eyebrow">SETLIST FOLDER</div><h2 id="folderGuideTitle">Share setlists with Google Drive</h2></div><button id="closeFolderGuide" type="button">Done</button></div>
@@ -214,6 +222,16 @@
   <div class="stream-address"><input id="setlistFolderPath" readonly aria-label="Setlist folder" placeholder="No folder chosen — Save and Open will ask each time"><button id="chooseSetlistFolder" type="button">Choose folder</button></div>
   <button id="showFolderGuide" type="button">How to set up a shared Google Drive folder</button>
   <p id="setlistFolderStatus" class="subtle" role="status"></p>
+ </section>
+ <section class="provider-section inbox-section">
+  <h3>Inbox</h3>
+  <p class="subtle">Give people an email address to send setlists and Scripture to, for example <em>worship@yourchurch.org</em>. New emails appear under <strong>Inbox</strong> next to the church name.</p>
+  <label>Email address<input id="inboxAddressInput" type="email" maxlength="254" autocomplete="off" placeholder="worship@yourchurch.org"></label>
+  <label>Password<input id="inboxPassword" type="password" maxlength="500" autocomplete="off"></label>
+  <details><summary>More options</summary><label>Mail server (only if connecting fails)<input id="inboxServer" maxlength="260" placeholder="mail.yourchurch.org"></label></details>
+  <div class="backup-actions"><button id="connectInbox" class="primary" type="button">Connect inbox</button><button id="forgetInbox" type="button" hidden>Disconnect</button></div>
+  <p id="inboxSettingsStatus" class="subtle" role="status"></p>
+  <p class="subtle"><strong>Gmail:</strong> use an app password instead of the normal one. Turn on 2-Step Verification in the Google account, then create one at myaccount.google.com/apppasswords. Use a separate email account just for WorshipUI, so it never reads personal mail.</p>
  </section>
  <section class="provider-section licensed-section">
   <h3>Licensed Bible versions</h3>
@@ -374,6 +392,7 @@
 <script src="i18n.js"></script>
 <script src="slide-template.cjs"></script>
 <script src="content-import.js"></script>
+<script src="email-requests.js"></script>
 <script src="bible-search.js"></script>
 <script src="app.js"></script>
 <script src="sync-core.js"></script>

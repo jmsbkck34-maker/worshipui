@@ -1269,7 +1269,7 @@ if(mode==='audience'||mode==='stage'){
    addItems(items){
      if(!Array.isArray(items)||!items.length||service.items.length+items.length>200){toast('The service can contain at most 200 items.');return false}
      if(items.some(item=>!item||!['Song','Scripture'].includes(item.type)||typeof item.title!=='string'||!item.title.trim()||!Array.isArray(item.slides)||!item.slides.length||item.slides.some(slide=>typeof slide!=='string')||!validTranslations(item))){toast('Imported content is invalid.');return false}
-     const additions=items.map(item=>{const addition={id:crypto.randomUUID(),title:item.title.trim(),type:item.type,theme:item.theme||(item.type==='Scripture'?'ember':'dusk'),slides:item.slides};['primaryVersion','secondaryVersion','secondarySlides','fitText','verseSlides','secondaryVerseSlides'].forEach(key=>{if(item[key]!==undefined)addition[key]=item[key]});return addition});
+     const additions=items.map(item=>{const addition={id:crypto.randomUUID(),title:item.title.trim(),type:item.type,theme:item.theme||(item.type==='Scripture'?'ember':'dusk'),slides:item.slides};['primaryVersion','secondaryVersion','secondarySlides','fitText','verseSlides','secondaryVerseSlides','template','sectionLabels'].forEach(key=>{if(item[key]!==undefined)addition[key]=item[key]});return addition});
      const candidate=structuredClone(service);candidate.items.push(...additions);
      if(!valid(candidate)){toast('Imported content exceeds the service limits.');return false}
      if(new Blob([JSON.stringify(candidate)]).size>4800000){toast('This service is too large to add the imported content. Use Back up or use smaller files.');return false}
@@ -1292,6 +1292,105 @@ if(mode==='audience'||mode==='stage'){
    advanceLive:()=>advanceLive(),
    setRole(role){this.role=role;['take','clear','blackout','audience','stage'].forEach(id=>$(id).disabled=role==='editor'||(id==='take'&&!current()));}
  };
+ // Inbox (installed app): emails sent to the church's WorshipUI address. Each one is read as a setlist, a Scripture
+ // request or a message; the operator adds it to the service or dismisses it. Email text is only ever shown as text.
+ const INBOX_DONE='worshipui.inbox.handled.v1',INBOX_EVERY=180000;
+ let inboxMessages=[],inboxAddress='',inboxChecking=false;
+ function handledIds(){try{const list=JSON.parse(workspaceStorage.getItem(INBOX_DONE)||'[]');return Array.isArray(list)?list.filter(id=>typeof id==='string'):[]}catch{return []}}
+ function markHandled(id){const list=handledIds().filter(other=>other!==id);list.push(id);try{workspaceStorage.setItem(INBOX_DONE,JSON.stringify(list.slice(-1000)))}catch{}}
+ function pendingMessages(){const done=new Set(handledIds());return inboxMessages.filter(message=>!done.has(message.id))}
+ function renderInboxCount(){
+  const count=pendingMessages().length;
+  $('inboxButton').hidden=!inboxAddress;$('inboxCount').hidden=!count;$('inboxCount').textContent=count>99?'99+':String(count);
+  $('inboxButton').classList?.toggle('has-mail',count>0);
+ }
+ function element(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node}
+ function inboxCard(message){
+  const request=WorshipEmail.parse(message,WorshipBible.bookId);
+  const card=element('article','inbox-card'),head=element('div','inbox-head');
+  head.append(element('span','inbox-kind inbox-'+request.kind,{setlist:'Setlist',scripture:'Scripture',note:'Message'}[request.kind]),element('strong',request.subject?'inbox-user':'',request.subject||'(No subject)'));
+  card.append(head,element('small','inbox-user',(message.fromName?message.fromName+' · ':'')+message.from+' · '+new Date(message.date).toLocaleString()));
+  const body=element('div','inbox-body'),actions=element('div','inbox-actions');let add=null;
+  if(request.kind==='setlist'){
+   const library=new Map(songs.songs.map(song=>[WorshipEmail.songKey(song.title),song])),boxes=[];
+   request.songs.forEach(title=>{
+    const row=element('label','check-row'),box=element('input');box.type='checkbox';box.checked=true;boxes.push({box,title});
+    row.append(box,element('span','inbox-user',title),element('small','',library.has(WorshipEmail.songKey(title))?'In your song library':'Not in your song library yet'));body.append(row);
+   });
+   add=()=>{
+    const chosen=boxes.filter(entry=>entry.box.checked);if(!chosen.length){toast('Choose at least one song.');return false}
+    const missing=[];
+    const items=chosen.map(({title})=>{const saved=library.get(WorshipEmail.songKey(title));if(saved){const song=structuredClone(saved);delete song.id;return song}missing.push(title);return {type:'Song',title,slides:[title]}});
+    if(!window.worshipWorkspace.addItems(items))return false;
+    toast(missing.length?'Added '+items.length+' songs. Add the lyrics for: '+missing.join(', ')+'.':'Added '+items.length+' songs from your song library.');return true;
+   };
+  }else if(request.kind==='scripture'){
+   {const line=element('p','inbox-reference');line.append(element('span','inbox-user',request.referenceText));if(request.verses)line.append(element('span','',' · verses included in the email'));body.append(line)}
+   if(request.others.length)body.append(element('p','subtle','Also mentioned: '+request.others.join(', ')+'. Add those from Scripture in the item editor.'));
+   if(request.verses)body.append(element('p','inbox-text inbox-user',request.verses.length>400?request.verses.slice(0,400)+'…':request.verses));
+   add=async()=>{
+    const {book,chapter,first,last}=request.reference;let item;
+    if(request.verses){
+     const numbers=Array.from({length:last-first+1},(_,n)=>first+n),pasted=WorshipBible.pastedPassage(request.verses,numbers);
+     const slides=pasted.slides.slice(0,200).map(text=>text.slice(0,20000));
+     item={type:'Scripture',title:request.referenceText,theme:'ember',slides,...(slides.length===1&&numbers.length>1?{fitText:true}:{})};
+    }else{
+     const version=bibleVersion(),data=await loadBible(version.id),result=WorshipBible.passage(data,book,chapter,first,last,mainLanguage());
+     item={type:'Scripture',title:result.reference+' · '+version.id,theme:'ember',primaryVersion:version.id,slides:result.slides.map((text,n)=>text+'\n'+result.verseReferences[n]+' · '+version.id)};
+    }
+    if(!window.worshipWorkspace.addItems([item]))return false;
+    toast(item.title+' added to the service.');return true;
+   };
+  }else body.append(element('p','inbox-text'+(request.text?' inbox-user':''),request.text.length>1200?request.text.slice(0,1200)+'…':request.text||'(This email has no text.)'));
+  if(add){
+   const addButton=element('button','primary',request.kind==='setlist'?'Add songs to the service':'Add to the service');addButton.type='button';
+   addButton.onclick=async()=>{addButton.disabled=true;try{if(await add()){markHandled(message.id);renderInbox()}}catch(error){toast(error.message||'Could not add that.')}finally{addButton.disabled=false}};
+   actions.append(addButton);
+  }
+  const dismiss=element('button','',request.kind==='note'?'Done':'Dismiss');dismiss.type='button';
+  dismiss.onclick=()=>{markHandled(message.id);renderInbox()};
+  actions.append(dismiss);card.append(body,actions);return card;
+ }
+ function renderInbox(){
+  renderInboxCount();
+  $('inboxAddress').textContent=inboxAddress?'Emails sent to '+inboxAddress+' in the last 30 days.':'';
+  const list=pendingMessages();$('inboxList').replaceChildren(...list.map(inboxCard));
+  if(!list.length&&!inboxChecking)$('inboxStatus').textContent='No new emails.';
+ }
+ async function checkInbox(quiet=false){
+  if(!inboxAddress||inboxChecking||!window.worshipDesktop?.inboxCheck)return;
+  inboxChecking=true;if(!quiet)$('inboxStatus').textContent='Checking the inbox…';
+  try{const result=await window.worshipDesktop.inboxCheck();inboxMessages=Array.isArray(result?.messages)?result.messages:[];$('inboxStatus').textContent='Checked at '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+'.'}
+  catch(error){$('inboxStatus').textContent=cleanError(error)||'Could not check the inbox.'}
+  finally{inboxChecking=false;renderInbox()}
+ }
+ function renderInboxSettings(){
+  if(inboxAddress)$('inboxAddressInput').value=inboxAddress;$('forgetInbox').hidden=!inboxAddress;
+  $('connectInbox').textContent=inboxAddress?'Update inbox':'Connect inbox';
+  $('inboxPassword').placeholder=inboxAddress?'Saved · type a new one to change it':'';
+ }
+ if(window.worshipDesktop?.inboxStatus){
+  $('inboxButton').onclick=()=>{renderInbox();$('inboxDialog').showModal();checkInbox(true)};
+  $('refreshInbox').onclick=()=>checkInbox();$('closeInbox').onclick=()=>$('inboxDialog').close();
+  $('connectInbox').onclick=async()=>{
+   const address=$('inboxAddressInput').value.trim(),password=$('inboxPassword').value;
+   if(!password){$('inboxSettingsStatus').textContent='Enter the password for that email address.';return}
+   $('connectInbox').disabled=true;$('inboxSettingsStatus').textContent='Connecting to '+address+'…';
+   try{
+    const result=await window.worshipDesktop.inboxConnect(address,password,$('inboxServer').value.trim());
+    inboxAddress=result.address;inboxMessages=Array.isArray(result.messages)?result.messages:[];$('inboxPassword').value='';
+    $('inboxSettingsStatus').textContent='Connected. New emails appear under Inbox next to the church name.';renderInboxSettings();renderInbox();
+   }catch(error){$('inboxSettingsStatus').textContent=cleanError(error)||'Could not connect.'}
+   finally{$('connectInbox').disabled=false}
+  };
+  $('forgetInbox').onclick=async()=>{
+   if(!confirm('Disconnect the inbox on this computer? The emails stay in the mailbox.'))return;
+   await window.worshipDesktop.inboxForget();inboxAddress='';inboxMessages=[];$('inboxAddressInput').value='';
+   $('inboxSettingsStatus').textContent='Inbox disconnected on this computer.';renderInboxSettings();renderInbox();
+  };
+  window.worshipDesktop.inboxStatus().then(status=>{inboxAddress=status?.address||'';$('inboxServer').value=status?.server||'';renderInboxSettings();renderInboxCount();checkInbox(true)}).catch(()=>{});
+  setInterval(()=>checkInbox(true),INBOX_EVERY);
+ }else document.querySelector('.inbox-section')?.setAttribute('hidden','');
  persist();render();
 }
 window.addEventListener('storage',e=>{if(e.key===SCREENS){renderOutput();return}if(e.key===BRANDING){renderOutput();window.worshipWorkspace?.renderBranding();return}if(e.key===LIVE){const o=read(LIVE,null);if(safeOutput(o)){output=o;renderOutput();if(!mode&&window.worshipWorkspace)window.worshipWorkspace.setRole(window.worshipWorkspace.role)}}});

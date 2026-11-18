@@ -43,7 +43,7 @@ test('desktop accepts only a plain HTTPS shared-service origin',()=>{
 test('packaged app and screens are served locally with internet unavailable',async()=>{
  const host=await createDesktopHost(root);
  try{
-  for(const url of ['/','/?view=audience','/?view=stage','/app.js','/content-import.js','/bible-search.js','/assets/bibles/kjv.vpl.txt','/assets/bibles/web.vpl.txt','/assets/bibles/rv1909.vpl.txt','/sync.js','/i18n.js','/sync-core.js','/style.css','/desktop-ui.js','/slide-template.cjs',...Object.values((await import('../slide-template.cjs')).default.bundledFonts).map(font=>'/assets/fonts/'+font+'.ttf')]){
+  for(const url of ['/','/?view=audience','/?view=stage','/app.js','/content-import.js','/email-requests.js','/bible-search.js','/assets/bibles/kjv.vpl.txt','/assets/bibles/web.vpl.txt','/assets/bibles/rv1909.vpl.txt','/sync.js','/i18n.js','/sync-core.js','/style.css','/desktop-ui.js','/slide-template.cjs',...Object.values((await import('../slide-template.cjs')).default.bundledFonts).map(font=>'/assets/fonts/'+font+'.ttf')]){
    const response=await fetch(host.origin+url);assert.equal(response.status,200);assert.ok((await response.arrayBuffer()).byteLength>0);
   }
   assert.equal((await fetch(host.origin+'/api/me')).status,503);

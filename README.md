@@ -164,6 +164,15 @@ Each release has three installers:
 
 All three share the app ID and data folder, so installing one over another keeps setlists and songs. The Mac build runs on GitHub's Intel Mac machines because Apple Silicon ones are often full, and the Windows downloads are published even when no Mac machine is free. Re-run the workflow later to add the Mac file.
 
+## Inbox: setlists and Scripture by email (0.3.8)
+
+The installed app can watch an ordinary email account, so people email setlists and Scripture readings to WorshipUI. Connect it under **Settings → Inbox** with the address and password. WorshipUI finds the IMAP server for Gmail, Outlook.com, Yahoo, iCloud and AOL, and tries `imap.<domain>` for anything else. **More options** takes a server name. Gmail and Yahoo need an app password. Use an account just for WorshipUI, because it can read everything in that inbox.
+
+- `desktop/inbox.mjs` connects over TLS on port 993 with certificate checks, opens INBOX **read-only**, and reads up to 30 messages from the last 30 days, 300 KB each at most. It returns plain text only. It uses [imapflow](https://github.com/postalsys/imapflow) and [mailparser](https://github.com/nodemailer/mailparser) (MIT), pinned exactly.
+- The password is encrypted with `safeStorage` in `inbox.json` in the app's data folder. It never reaches the page.
+- `email-requests.js` reads each email as a **setlist** (one song per line), a **Scripture** request (a reference such as *John 3:16-18* or *Juan 3:16*, with or without the verse text) or a **message**. It ignores quoted replies and signatures.
+- **✉ Inbox**, next to the church name, shows the number of new emails. The operator ticks songs and chooses **Add**. Songs from the song library come in with their lyrics, and new titles are added as placeholders. Scripture without text uses the chosen Bible version. **Dismiss** hides an email on that computer. Email text is shown only as text and is never translated by the interface language switch. WorshipUI checks every 3 minutes.
+
 ## macOS
 
 GitHub builds the Mac app automatically (`.github/workflows/build-mac.yml`) on every push to a `work/**` branch or `main`, and when run by hand from the **Actions** tab. Open the finished run and download **WorshipUI-mac** under *Artifacts*. It contains `WorshipUI-<version>-mac.dmg`, a universal app for Intel and Apple Silicon Macs. To build on a Mac yourself: `npm ci`, then `npm run build:mac`.

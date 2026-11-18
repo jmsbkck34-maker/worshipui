@@ -247,6 +247,23 @@
   'Translate the lyrics':'Traducir la letra','Offline translation works between English and Spanish.':'La traducción sin conexión funciona entre inglés y español.','Enter the lyrics first.':'Escribe la letra primero.',
   'Replace the second-language lyrics with a new translation?':'¿Reemplazar la letra en el segundo idioma con una nueva traducción?','Loading the translator…':'Cargando el traductor…','The translator could not start.':'No se pudo iniciar el traductor.','Could not translate the lyrics.':'No se pudo traducir la letra.',
   'Translated on this computer. Machine translation can miss the meaning or the rhythm, so read it through before you sing it.':'Traducido en este equipo. La traducción automática puede perder el sentido o el ritmo; léela antes de cantarla.','The translation came back incomplete. Try again.':'La traducción llegó incompleta. Inténtalo de nuevo.',
+  // Inbox
+  'Emails':'Correos','worship@yourchurch.org':'adoracion@tuiglesia.org','mail.yourchurch.org':'mail.tuiglesia.org',
+  '✉ Inbox':'✉ Bandeja','Emails sent to the WorshipUI inbox':'Correos enviados a la bandeja de WorshipUI','INBOX':'BANDEJA','Requests by email':'Pedidos por correo','Check now':'Revisar ahora',
+  'Nothing is added to the service until you choose to add it. WorshipUI only reads this inbox; it does not delete emails or mark them as read.':'Nada se agrega al servicio hasta que tú lo elijas. WorshipUI solo lee esta bandeja; no borra correos ni los marca como leídos.',
+  'Inbox':'Bandeja de entrada','Give people an email address to send setlists and Scripture to, for example':'Da a las personas un correo para enviar listas de cantos y Escrituras, por ejemplo',
+  '. New emails appear under':'. Los correos nuevos aparecen en','next to the church name.':'junto al nombre de la iglesia.','Email address':'Correo electrónico',
+  'More options':'Más opciones','Mail server (only if connecting fails)':'Servidor de correo (solo si falla la conexión)','Connect inbox':'Conectar bandeja','Update inbox':'Actualizar bandeja','Disconnect':'Desconectar',
+  'Gmail:':'Gmail:','use an app password instead of the normal one. Turn on 2-Step Verification in the Google account, then create one at myaccount.google.com/apppasswords. Use a separate email account just for WorshipUI, so it never reads personal mail.':'usa una contraseña de aplicación en lugar de la normal. Activa la verificación en dos pasos en la cuenta de Google y créala en myaccount.google.com/apppasswords. Usa una cuenta de correo solo para WorshipUI, para que nunca lea correo personal.',
+  'Saved · type a new one to change it':'Guardada · escribe una nueva para cambiarla','Setlist':'Lista de cantos','Message':'Mensaje','(No subject)':'(Sin asunto)','(This email has no text.)':'(Este correo no tiene texto.)',
+  'In your song library':'En tu biblioteca de cantos','Not in your song library yet':'Aún no está en tu biblioteca de cantos','Add songs to the service':'Agregar cantos al servicio','Add to the service':'Agregar al servicio',
+  'Dismiss':'Descartar','· verses included in the email':'· versículos incluidos en el correo','No new emails.':'No hay correos nuevos.','Checking the inbox…':'Revisando la bandeja…','Could not check the inbox.':'No se pudo revisar la bandeja.',
+  'Choose at least one song.':'Elige al menos un canto.','Enter the password for that email address.':'Escribe la contraseña de ese correo.','Could not connect.':'No se pudo conectar.',
+  'Connected. New emails appear under Inbox next to the church name.':'Conectado. Los correos nuevos aparecen en Bandeja junto al nombre de la iglesia.','Inbox disconnected on this computer.':'Bandeja desconectada en este equipo.',
+  'Disconnect the inbox on this computer? The emails stay in the mailbox.':'¿Desconectar la bandeja en este equipo? Los correos se quedan en el buzón.','Connect the inbox in Settings first.':'Primero conecta la bandeja en Configuración.',
+  'Enter the inbox email address, for example worship@yourchurch.org.':'Escribe el correo de la bandeja, por ejemplo adoracion@tuiglesia.org.','The email address or password was not accepted.':'El correo o la contraseña no fueron aceptados.',
+  'Could not reach the mail server. Check the internet connection.':'No se pudo llegar al servidor de correo. Revisa la conexión a internet.','This computer cannot store the email password securely.':'Este equipo no puede guardar la contraseña del correo de forma segura.',
+  'Gmail did not accept the password. Gmail needs an app password: in your Google account turn on 2-Step Verification, then create one at myaccount.google.com/apppasswords and paste it here.':'Gmail no aceptó la contraseña. Gmail necesita una contraseña de aplicación: en tu cuenta de Google activa la verificación en dos pasos, créala en myaccount.google.com/apppasswords y pégala aquí.',
   'Images and video':'Imágenes y video','Images & video':'Imágenes y video','Media':'Imágenes y video','Add images or videos':'Agregar imágenes o videos',
   'Each file becomes a slide. Videos play with sound on the audience screen.':'Cada archivo se convierte en una diapositiva. Los videos suenan en la pantalla de audiencia.',
   'Pause video':'Pausar video','Play video':'Reproducir video','Images and videos can be added in the installed app.':'Las imágenes y los videos se agregan en la app instalada.',
@@ -321,6 +338,10 @@
   [/^Display (\d+) shows$/,'El monitor $1 muestra'],[/^(\d+×\d+) · main$/,'$1 · principal']);
  patterns.push([/^The second-language lyrics need one block per slide: (\d+) slides, (\d+) blocks\.$/,'La letra en el segundo idioma necesita un bloque por diapositiva: $1 diapositivas, $2 bloques.']);
 patterns.push([/^Translating line (\d+) of (\d+)…$/,'Traduciendo la línea $1 de $2…']);
+patterns.push([/^Emails sent to (\S+) in the last 30 days\.$/,'Correos enviados a $1 en los últimos 30 días.'],[/^Checked at (.+)\.$/,'Revisado a las $1.'],[/^Connecting to (.+)…$/,'Conectando con $1…'],
+ [/^Added (\d+) songs from your song library\.$/,'Se agregaron $1 cantos de tu biblioteca.'],[/^Added (\d+) songs\. Add the lyrics for: (.+)\.$/,'Se agregaron $1 cantos. Agrega la letra de: $2.'],
+ [/^Also mentioned: (.+)\. Add those from Scripture in the item editor\.$/,'También se menciona: $1. Agrégalos desde Escritura en el editor.'],[/^(.+) added to the service\.$/,'$1 agregado al servicio.'],
+ [/^Could not find the mail server (\S+)\. Check the address, or enter the mail server under More options\.$/,'No se encontró el servidor de correo $1. Revisa el correo o escribe el servidor en Más opciones.']);
 patterns.push([/^Setlist saved: (.+)$/,'Servicio guardado: $1'],[/^Opened setlist (.+) from file$/,(m,date)=>'Servicio '+(date==='the undated service'?'sin fecha':date)+' abierto desde archivo'],
   [/^Folder: (.+)$/,'Carpeta: $1'],
   [/^Replace your setlist for (.+) with the one from the file\? A recovery copy of yours is kept\.$/,(m,date)=>'¿Reemplazar tu servicio del '+(date==='the undated service'?'servicio sin fecha':date)+' con el del archivo? Se guarda una copia de recuperación del tuyo.']);
@@ -334,7 +355,7 @@ patterns.push([/^Setlist saved: (.+)$/,'Servicio guardado: $1'],[/^Opened setlis
   [/^Remove (\S+) from this computer\? Slides already made with it stay in your services\.$/,'¿Quitar $1 de este equipo? Las diapositivas ya creadas con ella se conservan en tus servicios.'],
   [/^(\S+) · (.+) · (English|Spanish \(Español\))$/,(m,id,name,language)=>id+' · '+name+' · '+(language==='English'?'Inglés':'Español')],
   [/^Unexpected text in the Bible file near line (\d+)\.$/,'Texto inesperado en el archivo bíblico cerca de la línea $1.']);
- const SKIP='.screen, textarea, input, #order strong, #selectedTitle, #songResults, #versionList, #changeList, pre, #churchName[data-custom]';
+ const SKIP='.screen, textarea, input, #order strong, #selectedTitle, #songResults, #versionList, #changeList, pre, #churchName[data-custom], .inbox-user';
  const originals=new WeakMap(),attributes=new WeakMap(),ATTRS=['placeholder','aria-label','title'];
  let language='en',observer=null,applying=false,translated=false;
  function translate(text){

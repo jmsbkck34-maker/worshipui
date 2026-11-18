@@ -6,6 +6,7 @@ import {sharedOrigin} from './storage.mjs';
 const FILES=new Map([['/',['index.html','text/html']],['/index.html',['index.html','text/html']],['/app.js',['app.js','text/javascript']],['/content-import.js',['content-import.js','text/javascript']],['/sync.js',['sync.js','text/javascript']],['/sync-core.js',['sync-core.js','text/javascript']],['/slide-template.cjs',['slide-template.cjs','text/javascript']],['/assets/fonts/Inter.ttf',['assets/fonts/Inter.ttf','font/ttf']],['/assets/fonts/Montserrat.ttf',['assets/fonts/Montserrat.ttf','font/ttf']],['/assets/fonts/Lato.ttf',['assets/fonts/Lato.ttf','font/ttf']],['/assets/fonts/Merriweather.ttf',['assets/fonts/Merriweather.ttf','font/ttf']],['/assets/fonts/PlayfairDisplay.ttf',['assets/fonts/PlayfairDisplay.ttf','font/ttf']],['/assets/fonts/Oswald.ttf',['assets/fonts/Oswald.ttf','font/ttf']],['/assets/fonts/Poppins.ttf',['assets/fonts/Poppins.ttf','font/ttf']],['/assets/fonts/SourceSans3.ttf',['assets/fonts/SourceSans3.ttf','font/ttf']],['/desktop-ui.js',['desktop-ui.js','text/javascript']],['/style.css',['style.css','text/css']]]);
 FILES.set('/i18n.js',['i18n.js','text/javascript']);
 FILES.set('/bible-search.js',['bible-search.js','text/javascript']);
+FILES.set('/email-requests.js',['email-requests.js','text/javascript']);
 FILES.set('/assets/bibles/kjv.vpl.txt',['assets/bibles/kjv.vpl.txt','text/plain']);
 FILES.set('/assets/bibles/web.vpl.txt',['assets/bibles/web.vpl.txt','text/plain']);
 FILES.set('/assets/bibles/rv1909.vpl.txt',['assets/bibles/rv1909.vpl.txt','text/plain']);

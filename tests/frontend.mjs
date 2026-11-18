@@ -8,7 +8,7 @@ export async function frontendTests(){
  assert.match(html,/href="https:\/\/songselect\.ccli\.com\/"/);
  assert.doesNotMatch(html,/www\.songselect/);
  assert.doesNotMatch(html,/id="lyricsFile"/);
- const sources=await Promise.all(['slide-template.cjs','content-import.js','bible-search.js','app.js','sync-core.js','sync.js'].map(file=>readFile(new URL('../'+file,import.meta.url),'utf8')));
+ const sources=await Promise.all(['slide-template.cjs','content-import.js','email-requests.js','bible-search.js','app.js','sync-core.js','sync.js'].map(file=>readFile(new URL('../'+file,import.meta.url),'utf8')));
  const kjv=await readFile(new URL('../assets/bibles/kjv.vpl.txt',import.meta.url),'utf8');
  const rv1909=await readFile(new URL('../assets/bibles/rv1909.vpl.txt',import.meta.url),'utf8');
  const initial={title:'Sunday',items:[{id:'song',title:'Original',type:'Song',theme:'dusk',slides:['Original verse','Original chorus']}]};
@@ -16,7 +16,7 @@ export async function frontendTests(){
  let checks=0;function check(a,b){assert.equal(JSON.stringify(a),JSON.stringify(b));checks++}
  async function client(role='operator',online=true,savedStorage=null,desktop=null){
    const nodes=new Map(),storage=savedStorage||new Map([[key,JSON.stringify(initial)],[metaKey,JSON.stringify({baseRevision:1,baseService:initial,live:false,role,username:role})]]),intervals=[],dated=new Map();
-   function element(){return {value:'',open:false,style:{setProperty(key,value){this[key]=value}},children:[],textContent:'',append(...children){this.children.push(...children)},replaceChildren(){this.children=[]},setAttribute(){},showModal(){this.open=true},close(){this.open=false},click(){return this.onclick?.()},innerHTML:''}}
+   function element(){return {value:'',open:false,style:{setProperty(key,value){this[key]=value}},children:[],textContent:'',append(...children){this.children.push(...children)},replaceChildren(...children){this.children=children},setAttribute(){},showModal(){this.open=true},close(){this.open=false},click(){return this.onclick?.()},innerHTML:''}}
    const node=id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id)};
    let remote={revision:1,service:clone(initial),author:'home',savedAt:new Date().toISOString()},brandingRemote=null;
    const listeners=new Map(),documentListeners=new Map();
@@ -458,6 +458,33 @@ check(licensedItem.primaryVersion,'NIV');check(licensedItem.slides[0].startsWith
  check(english.node('songLanguageFields').hidden,true);
  english.node('typeInput').value='Scripture';await english.node('typeInput').onchange?.();
  check(english.node('translationFields').hidden,true);
+ // Inbox: emails sent to the church address show a count next to the church name; nothing is added until chosen.
+ const inboxMail=[{id:'m1',from:'maria@example.org',fromName:'Maria',subject:'Setlist for Sunday',date:'2026-11-17T10:00:00.000Z',text:'1. Amazing Grace\n2. Brand New Song'},
+  {id:'m2',from:'pastor@example.org',fromName:'',subject:'Scripture',date:'2026-11-17T09:00:00.000Z',text:'John 3:16'},
+  {id:'m3',from:'someone@example.org',fromName:'',subject:'Rehearsal',date:'2026-11-17T08:00:00.000Z',text:'Can we rehearse at 6:30 tonight?'}];
+ const inbox=await client('operator',false,null,{inboxStatus:async()=>({address:'worship@church.org',server:''}),inboxCheck:async()=>({messages:clone(inboxMail)}),importMedia:async()=>[]});
+ await new Promise(resolve=>setTimeout(resolve,0));
+ check(inbox.node('inboxButton').hidden,false);check(inbox.node('inboxCount').textContent,'3');
+ inbox.node('inboxButton').onclick();await new Promise(resolve=>setTimeout(resolve,0));
+ check(inbox.node('inboxDialog').open,true);
+ let inboxCards=inbox.node('inboxList').children;check(inboxCards.length,3);
+ check(inboxCards.map(card=>card.children[0].children[0].textContent),['Setlist','Scripture','Message']);
+ check(inbox.context.worshipWorkspace.getService().items.length,1);
+ // The setlist: one checkbox per song; unticked songs are left out.
+ const inboxSongRows=inboxCards[0].children[2].children;check(inboxSongRows.map(row=>row.children[1].textContent),['Amazing Grace','Brand New Song']);
+ inboxSongRows[1].children[0].checked=false;
+ await inboxCards[0].children[3].children[0].onclick();
+ let inboxItems=inbox.context.worshipWorkspace.getService().items;check(inboxItems.length,2);check(inboxItems[1].title,'Amazing Grace');check(inboxItems[1].type,'Song');
+ inboxCards=inbox.node('inboxList').children;check(inboxCards.length,2);check(inbox.node('inboxCount').textContent,'2');
+ // The Scripture request uses the Bible on this computer.
+ await inboxCards[0].children[3].children[0].onclick();
+ inboxItems=inbox.context.worshipWorkspace.getService().items;check(inboxItems.length,3);check(inboxItems[2].title,'John 3:16 · KJV');check(inboxItems[2].type,'Scripture');check(inboxItems[2].slides.length,1);
+ // A message has only Done; handled emails stay handled after the next check.
+ inboxCards=inbox.node('inboxList').children;check(inboxCards.length,1);check(inboxCards[0].children[3].children.length,1);
+ inboxCards[0].children[3].children[0].onclick();
+ await inbox.node('refreshInbox').onclick();check(inbox.node('inboxList').children.length,0);check(inbox.node('inboxCount').hidden,true);
+ // Without the installed app there is no inbox button.
+ check((await client('operator',false)).node('inboxButton').hidden,undefined);
  const remoteEditor=await client('editor',false);remoteEditor.node('slides').children[1].onclick();remoteEditor.node('slides').children[1].onclick();check(remoteEditor.storage.has(liveKey),false);
  return checks;
 }

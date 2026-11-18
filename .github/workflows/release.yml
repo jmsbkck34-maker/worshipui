@@ -88,8 +88,16 @@ jobs:
           notes="release-notes/${GITHUB_REF_NAME}.md"
           if [ -f "$notes" ]; then { cat "$notes"; printf '\n---\n\n'; } > notes.md; else : > notes.md; fi
           cat release-notes/downloads.md >> notes.md
+      # The Windows upload keeps its release/ and release-english/ folders, so the installers are found at any depth.
+      - name: Check the downloads are all there
+        shell: bash
+        run: |
+          find dist -type f \( -name '*.exe' -o -name '*.dmg' \) -print
+          test "$(find dist -type f -name '*.exe' | wc -l)" -eq 2
       - uses: softprops/action-gh-release@v2
         with:
           name: WorshipUI ${{ github.ref_name }}
-          files: dist/*
+          files: |
+            dist/**/*.exe
+            dist/**/*.dmg
           body_path: notes.md

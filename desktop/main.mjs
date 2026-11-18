@@ -8,6 +8,7 @@ import {openDeviceStore,sharedOrigin} from './storage.mjs';
 import {createDesktopHost} from './host.mjs';
 import {createStreamServer,streamState} from './stream.mjs';
 import {convertPowerPoint} from './powerpoint.mjs';
+import {checkInbox,serverFor,validAddress} from './inbox.mjs';
 const here=path.dirname(fileURLToPath(import.meta.url)),root=path.dirname(here);
 // Keep the original "Worship UI" data folder in AppData so existing services survive the rename.
 app.setPath('userData',path.join(app.getPath('appData'),'Worship UI'));
@@ -117,6 +118,34 @@ else {
    if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window');
    rmSync(googleFile,{force:true});googleEmail='';host.setLocalApi(null);
   });
+  // The church's WorshipUI inbox (see inbox.mjs). The password is encrypted with the operating system's
+  // protection (safeStorage) and never leaves the main process.
+  const inboxFile=path.join(app.getPath('userData'),'inbox.json');
+  const readInbox=()=>{try{const saved=JSON.parse(readFileSync(inboxFile,'utf8'));return validAddress(saved.address)?saved:null}catch{return null}};
+  let inboxCheck=null;
+  function runInboxCheck(account){
+   if(!inboxCheck)inboxCheck=checkInbox(account).finally(()=>{inboxCheck=null});
+   return inboxCheck;
+  }
+  const inboxOnly=event=>{if(!trusted(event)||event.sender!==main.webContents)throw Error('Untrusted window')};
+  ipcMain.handle('wui:inbox-status',event=>{inboxOnly(event);const saved=readInbox();return {address:saved?.address||'',server:saved?.custom||''}});
+  ipcMain.handle('wui:inbox-connect',async(event,address,password,server)=>{
+   inboxOnly(event);
+   address=String(address||'').trim();
+   if(!validAddress(address))throw Error('Enter the inbox email address, for example worship@yourchurch.org.');
+   if(typeof password!=='string'||!password||password.length>500)throw Error('Enter the password for that email address.');
+   if(!safeStorage.isEncryptionAvailable())throw Error('This computer cannot store the email password securely.');
+   const {host,port}=serverFor(address,server);
+   const result=await checkInbox({address,password,host,port});
+   writeFileSync(inboxFile,JSON.stringify({address,host,port,custom:String(server||'').trim(),password:safeStorage.encryptString(password).toString('base64')}),{mode:0o600});
+   return {address,...result};
+  });
+  ipcMain.handle('wui:inbox-check',async event=>{
+   inboxOnly(event);
+   const saved=readInbox();if(!saved)throw Error('Connect the inbox in Settings first.');
+   return runInboxCheck({address:saved.address,host:saved.host,port:saved.port,password:safeStorage.decryptString(Buffer.from(saved.password,'base64'))});
+  });
+  ipcMain.handle('wui:inbox-forget',event=>{inboxOnly(event);rmSync(inboxFile,{force:true})});
   // Livestream overlay for OBS, fed from the live slide, the stream settings and the CCLI numbers.
   const stored=key=>{try{return JSON.parse(store.getItem(key)||'null')}catch{return null}};
   let stream=null,streamError='',streamKey='';
